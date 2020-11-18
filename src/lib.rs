@@ -1,44 +1,20 @@
+mod client;
+mod experiment;
+mod run;
+mod storage;
 
-pub struct Client {}
+pub use client::Client;
+pub use experiment::Experiment;
+pub use run::Run;
 
-pub struct Experiment<'a> {
-    client: &'a Client,
-    name: String,
-}
+type Id = String;
 
-pub struct Run<'a> {
-    experiment: &'a Experiment<'a>,
-}
-
-impl Client {
-    pub fn create_experiment(&self, name: &str) -> Experiment {
-        Experiment {
-            client: self,
-            name: name.to_string(),
-        }
-    }
-    pub fn get_experiment(&self, name: &str) -> Option<Experiment> {
-        None
-    }
-    pub fn list_experiments(&self) -> Vec<Experiment> {
-        Vec::new()
-    }
-}
-
-impl Experiment<'_> {
-    pub fn create_run(&self) -> Run {
-        Run {
-            experiment: self,
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-impl Run<'_> {
-    pub fn log_param(&self, name: &str, value: &str) {}
-    pub fn log_metric(&self, name: &str, value: f64) {}
-    pub fn terminate(self) {}
+pub fn time_stamp() -> u64 {
+    use std::convert::TryInto;
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+        .try_into()
+        .unwrap()
 }
