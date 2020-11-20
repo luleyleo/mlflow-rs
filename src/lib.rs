@@ -10,8 +10,6 @@ pub use run::Run;
 /// All the errors.
 pub use storage::errors;
 
-type Id = String;
-
 /// Utility function to create a MLflow timestamp.
 pub fn timestamp() -> u64 {
     use std::convert::TryInto;

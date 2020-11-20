@@ -1,6 +1,6 @@
 use crate::{
     storage::{errors::StorageError, primitive},
-    Experiment, Id,
+    Experiment,
 };
 
 /// A MLflow Run.
@@ -10,28 +10,7 @@ use crate::{
 /// It allows logging [parameters][self::Run::log_param()] and [metrics][self::Run::log_metric()].
 pub struct Run<'a> {
     experiment: &'a Experiment<'a>,
-    id: Id,
-}
-
-pub enum RunStatus {
-    Running,
-    Scheduled,
-    Finished,
-    Failed,
-    Killed,
-}
-
-impl<S: AsRef<str>> From<S> for RunStatus {
-    fn from(string: S) -> Self {
-        match string.as_ref() {
-            "RUNNING" => RunStatus::Running,
-            "SCHEDULED" => RunStatus::Scheduled,
-            "FINISHED" => RunStatus::Finished,
-            "FAILED" => RunStatus::Failed,
-            "KILLED" => RunStatus::Killed,
-            s => panic!("Unknown run status {}", s),
-        }
-    }
+    id: String,
 }
 
 impl<'a> Run<'a> {

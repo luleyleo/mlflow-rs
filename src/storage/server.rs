@@ -1,8 +1,9 @@
 use std::convert::TryInto;
 
-use crate::storage::errors;
-use crate::storage::primitive::{Experiment, Run};
-use crate::Id;
+use crate::storage::{
+    errors,
+    primitive::{Experiment, Run},
+};
 use anyhow::{anyhow, Context};
 use errors::{CreateExperimentError, GetExperimentError, StorageError};
 use nanoserde::{DeJson, SerJson};
@@ -150,7 +151,7 @@ impl super::Storage for Storage {
         Ok(response.experiment)
     }
 
-    fn create_run(&self, experiment: &Id, start_time: u64) -> Result<Run, StorageError> {
+    fn create_run(&self, experiment: &str, start_time: u64) -> Result<Run, StorageError> {
         use api::create_run::{Request, Response};
         let request = Request {
             experiment_id: experiment.to_string(),
@@ -169,7 +170,7 @@ impl super::Storage for Storage {
         Ok(response.run)
     }
 
-    fn terminate_run(&self, run: &Id, end_time: u64) -> Result<(), StorageError> {
+    fn terminate_run(&self, run: &str, end_time: u64) -> Result<(), StorageError> {
         use api::update_run::Request;
         let request = Request {
             run_id: run.to_string(),
@@ -183,7 +184,7 @@ impl super::Storage for Storage {
         Ok(())
     }
 
-    fn log_param(&self, run: &Id, key: &str, value: &str) -> Result<(), StorageError> {
+    fn log_param(&self, run: &str, key: &str, value: &str) -> Result<(), StorageError> {
         use api::log_param::Request;
         let request = Request {
             run_id: run.to_string(),
@@ -199,7 +200,7 @@ impl super::Storage for Storage {
 
     fn log_metric(
         &self,
-        run: &Id,
+        run: &str,
         key: &str,
         value: f64,
         time_stamp: u64,

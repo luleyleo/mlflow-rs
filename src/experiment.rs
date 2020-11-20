@@ -1,5 +1,5 @@
 use crate::storage::primitive;
-use crate::{storage::errors::StorageError, Client, Id, Run};
+use crate::{storage::errors::StorageError, Client, Run};
 
 /// A MLflow Experiment.
 ///
@@ -7,7 +7,7 @@ use crate::{storage::errors::StorageError, Client, Id, Run};
 /// It can be used to group and create [`Run`]s.
 pub struct Experiment<'a> {
     pub(crate) client: &'a Client,
-    id: Id,
+    id: String,
     name: String,
 }
 
