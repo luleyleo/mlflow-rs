@@ -6,7 +6,7 @@ pub type StorageError = anyhow::Error;
 pub enum CreateExperimentError {
     #[error("the experiment {0} already exists")]
     AlreadyExists(String),
-    #[error("an error ocurred in the storage backend")]
+    #[error("an error ocurred in the storage backend: {0:?}")]
     Storage(#[from] StorageError),
 }
 
@@ -14,6 +14,6 @@ pub enum CreateExperimentError {
 pub enum GetExperimentError {
     #[error("the experiment {0} does not exist")]
     DoesNotExist(String),
-    #[error("an error ocurred in the storage backend")]
+    #[error("an error ocurred in the storage backend: {0:?}")]
     Storage(#[from] StorageError),
 }

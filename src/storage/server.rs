@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use crate::storage::errors;
 use crate::storage::primitive::{Experiment, Run};
 use crate::Id;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use errors::{CreateExperimentError, StorageError};
 use nanoserde::{DeJson, SerJson};
 
@@ -38,35 +38,54 @@ impl Endpoints {
     }
 }
 
-fn validate_response(response: &ureq::Response) -> Result<(), StorageError> {
+fn validate_response(response: ureq::Response) -> Result<ureq::Response, StorageError> {
     if response.error() {
+        let status = response.status();
+        let body = response.into_string()?;
         return Err(anyhow::anyhow!(
-            "request failed with status code {}",
-            response.status()
+            "request failed with status code {}. Body: {}",
+            status , body
         ));
     }
-    Ok(())
+    Ok(response)
 }
 
 impl super::Storage for Storage {
     fn create_experiment(&self, name: &str) -> Result<Experiment, CreateExperimentError> {
         use api::create_experiment::{Request, Response};
         let request = Request::new(name.to_string()).serialize_json();
-        let endpoint = &self.endpoints.experiments_create;
+        let endpoint = dbg!(&self.endpoints.experiments_create);
         let http_response = ureq::post(endpoint).send_string(&request);
-        validate_response(&http_response)?;
+        if http_response.error() {
+            let status = http_response.status();
+            let body = http_response.into_string().context("turning error response into string")?;
+            return Err({
+                if status == 400 {
+                    let response = api::ErrorResponse::deserialize_json(&body).context("deserializing error body")?;
+                    match response.error_code.as_ref() {
+                        api::RESOURCE_ALREADY_EXISTS => CreateExperimentError::AlreadyExists(name.to_string()),
+                        code => CreateExperimentError::Storage(anyhow!("Unknown error code {}", code))
+                    }
+                } else {
+                    CreateExperimentError::Storage(anyhow!(
+                        "request failed with status code {}. Body: {}",
+                        status , body
+                    ))
+                }
+            })
+        }
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
-        let response = Response::deserialize_json(&response_body).context("deserializing json")?;
-        Ok(self.get_experiment(&response.id).unwrap())
+        let _response = Response::deserialize_json(&response_body).context("deserializing json")?;
+        Ok(self.get_experiment(name).unwrap())
     }
 
     fn list_experiments(&self) -> Result<Vec<Experiment>, StorageError> {
         use api::list_experiments::Response;
         let endpoint = &self.endpoints.experiments_list;
         let http_response = ureq::get(endpoint).send_string("{}");
-        validate_response(&http_response)?;
+        let http_response = validate_response(http_response)?;
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
@@ -79,7 +98,7 @@ impl super::Storage for Storage {
         let request = Request::new(name.to_string()).serialize_json();
         let endpoint = &self.endpoints.experiments_create;
         let http_response = ureq::post(endpoint).send_string(&request);
-        validate_response(&http_response)?;
+        let http_response = validate_response(http_response)?;
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
@@ -98,7 +117,7 @@ impl super::Storage for Storage {
         let request = request.serialize_json();
         let endpoint = &self.endpoints.experiments_create;
         let http_response = ureq::post(endpoint).send_string(&request);
-        validate_response(&http_response)?;
+        let http_response = validate_response(http_response)?;
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
@@ -116,7 +135,7 @@ impl super::Storage for Storage {
         let request = request.serialize_json();
         let endpoint = &self.endpoints.experiments_create;
         let http_response = ureq::post(endpoint).send_string(&request);
-        validate_response(&http_response)?;
+        validate_response(http_response)?;
         Ok(())
     }
 
@@ -130,7 +149,7 @@ impl super::Storage for Storage {
         let request = request.serialize_json();
         let endpoint = &self.endpoints.experiments_create;
         let http_response = ureq::post(endpoint).send_string(&request);
-        validate_response(&http_response)?;
+        validate_response(http_response)?;
         Ok(())
     }
 
@@ -153,7 +172,7 @@ impl super::Storage for Storage {
         let request = request.serialize_json();
         let endpoint = &self.endpoints.experiments_create;
         let http_response = ureq::post(endpoint).send_string(&request);
-        validate_response(&http_response)?;
+        validate_response(http_response)?;
         Ok(())
     }
 }
@@ -161,6 +180,14 @@ impl super::Storage for Storage {
 mod api {
     use crate::storage::primitive::*;
     use nanoserde::{DeJson, SerJson};
+
+    pub const RESOURCE_ALREADY_EXISTS: &str = "RESOURCE_ALREADY_EXISTS";
+
+    #[derive(DeJson)]
+    pub struct ErrorResponse {
+        pub error_code: String,
+        pub message: String,
+    }
 
     pub mod create_experiment {
         use super::*;
@@ -178,7 +205,7 @@ mod api {
 
         #[derive(DeJson)]
         pub struct Response {
-            pub id: String,
+            pub experiment_id: String,
         }
     }
 
