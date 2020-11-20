@@ -4,7 +4,7 @@ use crate::storage::errors;
 use crate::storage::primitive::{Experiment, Run};
 use crate::Id;
 use anyhow::{anyhow, Context};
-use errors::{CreateExperimentError, StorageError};
+use errors::{CreateExperimentError, GetExperimentError, StorageError};
 use nanoserde::{DeJson, SerJson};
 
 pub struct Storage {
@@ -16,6 +16,9 @@ struct Endpoints {
     pub experiments_list: String,
     pub experiments_get: String,
     pub runs_create: String,
+    pub runs_update: String,
+    pub runs_log_param: String,
+    pub runs_log_metric: String,
 }
 
 impl Storage {
@@ -34,6 +37,9 @@ impl Endpoints {
             experiments_list: format!("{}/experiments/list", api),
             experiments_get: format!("{}/experiments/get-by-name", api),
             runs_create: format!("{}/runs/create", api),
+            runs_update: format!("{}/runs/update", api),
+            runs_log_param: format!("{}/runs/log-parameter", api),
+            runs_log_metric: format!("{}/runs/log-metric", api),
         }
     }
 }
@@ -64,7 +70,7 @@ impl super::Storage for Storage {
                     let response = api::ErrorResponse::deserialize_json(&body).context("deserializing error body")?;
                     match response.error_code.as_ref() {
                         api::RESOURCE_ALREADY_EXISTS => CreateExperimentError::AlreadyExists(name.to_string()),
-                        code => CreateExperimentError::Storage(anyhow!("Unknown error code {}", code))
+                        code => CreateExperimentError::Storage(anyhow!("Unknown error code {}. Message: {}", code, response.message))
                     }
                 } else {
                     CreateExperimentError::Storage(anyhow!(
@@ -93,12 +99,29 @@ impl super::Storage for Storage {
         Ok(response.experiments)
     }
 
-    fn get_experiment(&self, name: &str) -> Result<Experiment, errors::GetExperimentError> {
+    fn get_experiment(&self, name: &str) -> Result<Experiment, GetExperimentError> {
         use api::get_experiment_by_name::{Request, Response};
         let request = Request::new(name.to_string()).serialize_json();
-        let endpoint = &self.endpoints.experiments_create;
-        let http_response = ureq::post(endpoint).send_string(&request);
-        let http_response = validate_response(http_response)?;
+        let endpoint = &self.endpoints.experiments_get;
+        let http_response = ureq::get(endpoint).send_string(&request);
+        if http_response.error() {
+            let status = http_response.status();
+            let body = http_response.into_string().context("turning error response into string")?;
+            return Err({
+                if status == 404 {
+                    let response = api::ErrorResponse::deserialize_json(&body).context("deserializing error body")?;
+                    match response.error_code.as_ref() {
+                        api::RESOURCE_DOES_NOT_EXIST => GetExperimentError::DoesNotExist(name.to_string()),
+                        code => GetExperimentError::Storage(anyhow!("Unknown error code {}. Message: {}", code, response.message))
+                    }
+                } else {
+                    GetExperimentError::Storage(anyhow!(
+                        "request failed with status code {}. Body: {}",
+                        status , body
+                    ))
+                }
+            })
+        }
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
@@ -115,7 +138,7 @@ impl super::Storage for Storage {
             tags: Vec::new(),
         };
         let request = request.serialize_json();
-        let endpoint = &self.endpoints.experiments_create;
+        let endpoint = &self.endpoints.runs_create;
         let http_response = ureq::post(endpoint).send_string(&request);
         let http_response = validate_response(http_response)?;
         let response_body = http_response
@@ -133,7 +156,7 @@ impl super::Storage for Storage {
             end_time: end_time.try_into()?,
         };
         let request = request.serialize_json();
-        let endpoint = &self.endpoints.experiments_create;
+        let endpoint = &self.endpoints.runs_update;
         let http_response = ureq::post(endpoint).send_string(&request);
         validate_response(http_response)?;
         Ok(())
@@ -147,7 +170,7 @@ impl super::Storage for Storage {
             value: value.to_string(),
         };
         let request = request.serialize_json();
-        let endpoint = &self.endpoints.experiments_create;
+        let endpoint = &self.endpoints.runs_log_param;
         let http_response = ureq::post(endpoint).send_string(&request);
         validate_response(http_response)?;
         Ok(())
@@ -170,7 +193,7 @@ impl super::Storage for Storage {
             step: step.try_into()?,
         };
         let request = request.serialize_json();
-        let endpoint = &self.endpoints.experiments_create;
+        let endpoint = &self.endpoints.runs_log_metric;
         let http_response = ureq::post(endpoint).send_string(&request);
         validate_response(http_response)?;
         Ok(())
@@ -182,6 +205,8 @@ mod api {
     use nanoserde::{DeJson, SerJson};
 
     pub const RESOURCE_ALREADY_EXISTS: &str = "RESOURCE_ALREADY_EXISTS";
+    pub const RESOURCE_DOES_NOT_EXIST: &str = "RESOURCE_DOES_NOT_EXIST";
+    //pub const INVALID_PARAMETER_VALUE: &str = "INVALID_PARAMETER_VALUE";
 
     #[derive(DeJson)]
     pub struct ErrorResponse {

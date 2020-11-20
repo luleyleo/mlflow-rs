@@ -6,6 +6,7 @@ mod storage;
 pub use client::Client;
 pub use experiment::Experiment;
 pub use run::Run;
+pub use storage::errors;
 
 type Id = String;
 
