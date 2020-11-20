@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use crate::storage::{
     errors,
     primitive::{Experiment, Run},
@@ -7,6 +5,7 @@ use crate::storage::{
 use anyhow::{anyhow, Context};
 use errors::{CreateExperimentError, GetExperimentError, StorageError};
 use nanoserde::{DeJson, SerJson};
+use std::convert::TryInto;
 
 pub struct Storage {
     endpoints: Endpoints,

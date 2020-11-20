@@ -1,5 +1,4 @@
-use crate::storage::primitive;
-use crate::{storage::errors::StorageError, Client, Run};
+use crate::{Client, Run, storage::{errors, primitive}};
 
 /// A MLflow Experiment.
 ///
@@ -30,7 +29,7 @@ impl Experiment<'_> {
 
 /// Experiment methods with error handling.
 impl Experiment<'_> {
-    pub fn try_create_run(&self) -> Result<Run, StorageError> {
+    pub fn try_create_run(&self) -> Result<Run, errors::StorageError> {
         let start_time = crate::timestamp();
         let primitive = self.client.storage.create_run(&self.id, start_time)?;
         Ok(Run::new(self, primitive))

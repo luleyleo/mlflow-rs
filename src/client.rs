@@ -1,8 +1,6 @@
 use crate::{
     storage::{
-        self,
-        errors::CreateExperimentError,
-        errors::{GetExperimentError, StorageError},
+        errors::{CreateExperimentError, GetExperimentError, StorageError},
         Storage,
     },
     Experiment,
@@ -24,7 +22,7 @@ impl Client {
     /// The `url` should be something like `http://127.0.0.1:5000/api`.
     pub fn for_server(url: &str) -> Self {
         Client {
-            storage: Arc::new(storage::Server::new(url)),
+            storage: Arc::new(crate::storage::Server::new(url)),
         }
     }
 }
