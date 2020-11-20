@@ -1,4 +1,7 @@
-use crate::{Experiment, Id, storage::{errors::StorageError, primitive}};
+use crate::{
+    storage::{errors::StorageError, primitive},
+    Experiment, Id,
+};
 
 /// A MLflow Run.
 ///
@@ -58,15 +61,30 @@ impl Run<'_> {
 /// Client methods with error handling.
 impl Run<'_> {
     pub fn try_log_param(&self, name: &str, value: &str) -> Result<(), StorageError> {
-        self.experiment.client.storage.log_param(&self.id, name, value)
+        self.experiment
+            .client
+            .storage
+            .log_param(&self.id, name, value)
     }
 
-    pub fn try_log_metric(&self, name: &str, value: f64, time_stamp: u64, step: u64) -> Result<(), StorageError> {
-        self.experiment.client.storage.log_metric(&self.id, name, value, time_stamp, step)
+    pub fn try_log_metric(
+        &self,
+        name: &str,
+        value: f64,
+        time_stamp: u64,
+        step: u64,
+    ) -> Result<(), StorageError> {
+        self.experiment
+            .client
+            .storage
+            .log_metric(&self.id, name, value, time_stamp, step)
     }
 
     pub fn try_terminate(self) -> Result<(), StorageError> {
         let end_time = crate::timestamp();
-        self.experiment.client.storage.terminate_run(&self.id, end_time)
+        self.experiment
+            .client
+            .storage
+            .terminate_run(&self.id, end_time)
     }
 }

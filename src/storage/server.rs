@@ -50,7 +50,8 @@ fn validate_response(response: ureq::Response) -> Result<ureq::Response, Storage
         let body = response.into_string()?;
         return Err(anyhow::anyhow!(
             "request failed with status code {}. Body: {}",
-            status , body
+            status,
+            body
         ));
     }
     Ok(response)
@@ -64,21 +65,31 @@ impl super::Storage for Storage {
         let http_response = ureq::post(endpoint).send_string(&request);
         if http_response.error() {
             let status = http_response.status();
-            let body = http_response.into_string().context("turning error response into string")?;
+            let body = http_response
+                .into_string()
+                .context("turning error response into string")?;
             return Err({
                 if status == 400 {
-                    let response = api::ErrorResponse::deserialize_json(&body).context("deserializing error body")?;
+                    let response = api::ErrorResponse::deserialize_json(&body)
+                        .context("deserializing error body")?;
                     match response.error_code.as_ref() {
-                        api::RESOURCE_ALREADY_EXISTS => CreateExperimentError::AlreadyExists(name.to_string()),
-                        code => CreateExperimentError::Storage(anyhow!("Unknown error code {}. Message: {}", code, response.message))
+                        api::RESOURCE_ALREADY_EXISTS => {
+                            CreateExperimentError::AlreadyExists(name.to_string())
+                        }
+                        code => CreateExperimentError::Storage(anyhow!(
+                            "Unknown error code {}. Message: {}",
+                            code,
+                            response.message
+                        )),
                     }
                 } else {
                     CreateExperimentError::Storage(anyhow!(
                         "request failed with status code {}. Body: {}",
-                        status , body
+                        status,
+                        body
                     ))
                 }
-            })
+            });
         }
         let response_body = http_response
             .into_string()
@@ -106,21 +117,31 @@ impl super::Storage for Storage {
         let http_response = ureq::get(endpoint).send_string(&request);
         if http_response.error() {
             let status = http_response.status();
-            let body = http_response.into_string().context("turning error response into string")?;
+            let body = http_response
+                .into_string()
+                .context("turning error response into string")?;
             return Err({
                 if status == 404 {
-                    let response = api::ErrorResponse::deserialize_json(&body).context("deserializing error body")?;
+                    let response = api::ErrorResponse::deserialize_json(&body)
+                        .context("deserializing error body")?;
                     match response.error_code.as_ref() {
-                        api::RESOURCE_DOES_NOT_EXIST => GetExperimentError::DoesNotExist(name.to_string()),
-                        code => GetExperimentError::Storage(anyhow!("Unknown error code {}. Message: {}", code, response.message))
+                        api::RESOURCE_DOES_NOT_EXIST => {
+                            GetExperimentError::DoesNotExist(name.to_string())
+                        }
+                        code => GetExperimentError::Storage(anyhow!(
+                            "Unknown error code {}. Message: {}",
+                            code,
+                            response.message
+                        )),
                     }
                 } else {
                     GetExperimentError::Storage(anyhow!(
                         "request failed with status code {}. Body: {}",
-                        status , body
+                        status,
+                        body
                     ))
                 }
-            })
+            });
         }
         let response_body = http_response
             .into_string()

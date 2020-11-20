@@ -1,6 +1,6 @@
 use anyhow::Result;
 use mlflow::{timestamp, Client};
-use nanorand::{RNG, WyRand};
+use nanorand::{WyRand, RNG};
 
 struct Args {
     experiment: String,

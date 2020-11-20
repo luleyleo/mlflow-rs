@@ -1,5 +1,5 @@
-use crate::Id;
 use crate::storage::primitive::{Experiment, Run};
+use crate::Id;
 
 pub mod errors;
 use errors::{CreateExperimentError, GetExperimentError, StorageError};
@@ -18,5 +18,12 @@ pub(crate) trait Storage {
     fn terminate_run(&self, run: &Id, end_time: u64) -> Result<(), StorageError>;
 
     fn log_param(&self, run: &Id, key: &str, value: &str) -> Result<(), StorageError>;
-    fn log_metric(&self, run: &Id, key: &str, value: f64, time_stamp: u64, step: u64) -> Result<(), StorageError>;
+    fn log_metric(
+        &self,
+        run: &Id,
+        key: &str,
+        value: f64,
+        time_stamp: u64,
+        step: u64,
+    ) -> Result<(), StorageError>;
 }
