@@ -3,8 +3,11 @@ name = "mlflow"
 version = "0.1.0"
 authors = ["Leopold Luley <git@leopoldluley.de>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "A client library for MLflow tracking"
+repository = "https://github.com/finnerale/mlflow-rs"
+license = "MIT"
+keywords = ["logging", "tracking", "ml", "api"]
+categories = ["api-bindings", "science", "visualization"]
 
 [dependencies]
 anyhow = "1.0.34"
