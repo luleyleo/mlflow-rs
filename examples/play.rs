@@ -1,5 +1,5 @@
 use anyhow::Result;
-use mlflow::{time_stamp, Client};
+use mlflow::{timestamp, Client};
 use nanorand::{RNG, WyRand};
 
 struct Args {
@@ -80,7 +80,7 @@ fn main() -> Result<()> {
             let int: f64 = rng.generate::<u16>().into();
             let max: f64 = std::u16::MAX.into();
             let value = int / max;
-            run.log_metric("rand", value, time_stamp(), s);
+            run.log_metric("rand", value, timestamp(), s);
         }
         run.terminate();
     }

@@ -1,6 +1,10 @@
 use crate::{Client, Id, Run, storage::errors::StorageError};
 use crate::storage::primitive;
 
+/// A MLflow Experiment.
+///
+/// This can be created using [`Client::create_experiment`].
+/// It can be used to group and create [`Run`]s.
 pub struct Experiment<'a> {
     pub(crate) client: &'a Client,
     id: Id,
@@ -15,17 +19,26 @@ impl<'a> Experiment<'a> {
             name: experiment.name,
         }
     }
+}
 
+/// Experiment methods without error handling.
+impl Experiment<'_> {
     pub fn create_run(&self) -> Run {
         self.try_create_run().unwrap()
     }
+}
 
+/// Experiment methods with error handling.
+impl Experiment<'_> {
     pub fn try_create_run(&self) -> Result<Run, StorageError> {
-        let start_time = crate::time_stamp();
+        let start_time = crate::timestamp();
         let primitive = self.client.storage.create_run(&self.id, start_time)?;
         Ok(Run::new(self, primitive))
     }
+}
 
+/// Experiment information getters.
+impl Experiment<'_> {
     pub fn name(&self) -> &str {
         &self.name
     }
