@@ -11,3 +11,7 @@ anyhow = "1.0.34"
 nanoserde = "0.1.20"
 thiserror = "1.0.22"
 ureq = { version = "1.5.2", default-features=false, features=["tls"] }
+
+[dev-dependencies]
+nanorand = "0.4.4"
+pico-args = "0.3.4"
