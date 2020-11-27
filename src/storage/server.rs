@@ -61,7 +61,7 @@ impl super::Storage for Storage {
     fn create_experiment(&self, name: &str) -> Result<Experiment, CreateExperimentError> {
         use api::create_experiment::{Request, Response};
         let request = Request::new(name.to_string()).serialize_json();
-        let endpoint = dbg!(&self.endpoints.experiments_create);
+        let endpoint = &self.endpoints.experiments_create;
         let http_response = ureq::post(endpoint).send_string(&request);
         if http_response.error() {
             let status = http_response.status();
