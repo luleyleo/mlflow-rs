@@ -1,7 +1,5 @@
 use nanoserde::{DeJson, SerJson};
 
-use crate::storage::BufferedMetric;
-
 type Int64 = i64;
 
 #[derive(Debug, SerJson, DeJson)]
@@ -74,15 +72,4 @@ pub struct RunInfo {
 pub struct RunTag {
     pub key: String,
     pub value: String,
-}
-
-impl From<BufferedMetric> for Metric {
-    fn from(metric: BufferedMetric) -> Self {
-        Metric {
-            key: metric.name.to_string(),
-            value: metric.value,
-            timestamp: metric.timestamp as i64,
-            step: metric.step as i64,
-        }
-    }
 }

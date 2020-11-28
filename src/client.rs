@@ -21,7 +21,7 @@ impl Client {
     /// The `url` should be something like `http://127.0.0.1:5000/api`.
     pub fn for_server(url: &str) -> Self {
         Client {
-            storage: Box::new(crate::storage::Server::new(url)),
+            storage: Box::new(crate::storage::server::ClientStorage::new(url)),
         }
     }
 }

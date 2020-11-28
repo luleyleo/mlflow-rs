@@ -3,17 +3,9 @@ use crate::{Experiment, Run};
 pub mod errors;
 use errors::{CreateExperimentError, GetExperimentError, StorageError};
 
-mod server;
-pub(crate) use server::ServerClientStorage as Server;
+pub mod primitive;
 
-pub(crate) mod primitive;
-
-pub(crate) struct BufferedMetric {
-    pub name: &'static str,
-    pub value: f64,
-    pub timestamp: u64,
-    pub step: u64,
-}
+pub(crate) mod server;
 
 pub(crate) trait ClientStorage {
     fn create_experiment(&mut self, name: &str) -> Result<Experiment, CreateExperimentError>;
@@ -36,26 +28,4 @@ pub(crate) trait RunStorage {
         step: u64,
     ) -> Result<(), StorageError>;
     fn terminate(&mut self, run: &str, end_time: u64) -> Result<(), StorageError>;
-}
-
-pub(crate) trait Storage {
-    fn create_experiment(&self, name: &str)
-        -> Result<primitive::Experiment, CreateExperimentError>;
-    fn list_experiments(&self) -> Result<Vec<primitive::Experiment>, StorageError>;
-    fn get_experiment(&self, name: &str) -> Result<primitive::Experiment, GetExperimentError>;
-
-    fn create_run(&self, experiment: &str, start_time: u64)
-        -> Result<primitive::Run, StorageError>;
-    fn terminate_run(&self, run: &str, end_time: u64) -> Result<(), StorageError>;
-
-    fn log_param(&self, run: &str, key: &str, value: &str) -> Result<(), StorageError>;
-    fn log_metric(
-        &self,
-        run: &str,
-        key: &str,
-        value: f64,
-        time_stamp: u64,
-        step: u64,
-    ) -> Result<(), StorageError>;
-    fn log_batch(&self, run: &str, metrics: &mut Vec<BufferedMetric>) -> Result<(), StorageError>;
 }
