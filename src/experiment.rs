@@ -1,19 +1,26 @@
-use crate::{Client, Run, storage::{errors, primitive}};
+use crate::{
+    storage::ExperimentStorage,
+    storage::{errors, primitive},
+    Run,
+};
 
 /// A MLflow Experiment.
 ///
 /// This can be created using [`Client::create_experiment`].
 /// It can be used to group and create [`Run`]s.
-pub struct Experiment<'a> {
-    pub(crate) client: &'a Client,
+pub struct Experiment {
+    storage: Box<dyn ExperimentStorage>,
     id: String,
     name: String,
 }
 
-impl<'a> Experiment<'a> {
-    pub(crate) fn new(client: &'a Client, experiment: primitive::Experiment) -> Self {
+impl Experiment {
+    pub(crate) fn new(
+        storage: Box<dyn ExperimentStorage>,
+        experiment: primitive::Experiment,
+    ) -> Self {
         Experiment {
-            client,
+            storage,
             id: experiment.experiment_id,
             name: experiment.name,
         }
@@ -21,23 +28,22 @@ impl<'a> Experiment<'a> {
 }
 
 /// Experiment methods without error handling.
-impl Experiment<'_> {
-    pub fn create_run(&self) -> Run {
+impl Experiment {
+    pub fn create_run(&mut self) -> Run {
         self.try_create_run().unwrap()
     }
 }
 
 /// Experiment methods with error handling.
-impl Experiment<'_> {
-    pub fn try_create_run(&self) -> Result<Run, errors::StorageError> {
+impl Experiment {
+    pub fn try_create_run(&mut self) -> Result<Run, errors::StorageError> {
         let start_time = crate::timestamp();
-        let primitive = self.client.storage.create_run(&self.id, start_time)?;
-        Ok(Run::new(self, primitive))
+        self.storage.create_run(&self.id, start_time)
     }
 }
 
 /// Experiment information getters.
-impl Experiment<'_> {
+impl Experiment {
     pub fn name(&self) -> &str {
         &self.name
     }

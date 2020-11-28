@@ -1,16 +1,27 @@
-use crate::storage::{
-    errors,
-    primitive::{Experiment, Run, Metric},
-};
+use crate::storage::{errors, primitive};
 use anyhow::{anyhow, Context};
 use errors::{CreateExperimentError, GetExperimentError, StorageError};
 use nanoserde::{DeJson, SerJson};
-use std::convert::TryInto;
+use std::{convert::TryInto, sync::Arc};
 
-use super::BufferedMetric;
+use super::{BufferedMetric, ClientStorage, ExperimentStorage, RunStorage, Storage};
 
-pub struct Storage {
-    endpoints: Endpoints,
+pub struct ServerClientStorage {
+    server: Server,
+}
+
+pub struct ServerExperimentStorage {
+    server: Server,
+}
+
+pub struct ServerRunStorage {
+    server: Server,
+    buffer: Vec<BufferedMetric>,
+}
+
+#[derive(Clone)]
+pub struct Server {
+    endpoints: Arc<Endpoints>,
 }
 
 struct Endpoints {
@@ -24,10 +35,10 @@ struct Endpoints {
     pub runs_log_batch: String,
 }
 
-impl Storage {
+impl Server {
     pub fn new(url: &str) -> Self {
-        Storage {
-            endpoints: Endpoints::new(url),
+        Server {
+            endpoints: Arc::new(Endpoints::new(url)),
         }
     }
 }
@@ -61,8 +72,11 @@ fn validate_response(response: ureq::Response) -> Result<ureq::Response, Storage
     Ok(response)
 }
 
-impl super::Storage for Storage {
-    fn create_experiment(&self, name: &str) -> Result<Experiment, CreateExperimentError> {
+impl Storage for Server {
+    fn create_experiment(
+        &self,
+        name: &str,
+    ) -> Result<primitive::Experiment, CreateExperimentError> {
         use api::create_experiment::{Request, Response};
         let request = Request::new(name.to_string()).serialize_json();
         let endpoint = &self.endpoints.experiments_create;
@@ -102,7 +116,7 @@ impl super::Storage for Storage {
         Ok(self.get_experiment(name).unwrap())
     }
 
-    fn list_experiments(&self) -> Result<Vec<Experiment>, StorageError> {
+    fn list_experiments(&self) -> Result<Vec<primitive::Experiment>, StorageError> {
         use api::list_experiments::Response;
         let endpoint = &self.endpoints.experiments_list;
         let http_response = ureq::get(endpoint).send_string("{}");
@@ -114,7 +128,7 @@ impl super::Storage for Storage {
         Ok(response.experiments)
     }
 
-    fn get_experiment(&self, name: &str) -> Result<Experiment, GetExperimentError> {
+    fn get_experiment(&self, name: &str) -> Result<primitive::Experiment, GetExperimentError> {
         use api::get_experiment_by_name::{Request, Response};
         let request = Request::new(name.to_string()).serialize_json();
         let endpoint = &self.endpoints.experiments_get;
@@ -154,7 +168,11 @@ impl super::Storage for Storage {
         Ok(response.experiment)
     }
 
-    fn create_run(&self, experiment: &str, start_time: u64) -> Result<Run, StorageError> {
+    fn create_run(
+        &self,
+        experiment: &str,
+        start_time: u64,
+    ) -> Result<primitive::Run, StorageError> {
         use api::create_run::{Request, Response};
         let request = Request {
             experiment_id: experiment.to_string(),
@@ -230,7 +248,10 @@ impl super::Storage for Storage {
             let count = usize::min(metrics.len(), 1000);
             let request = Request {
                 run_id: run.to_string(),
-                metrics: metrics.drain(..count).map(|m| Metric::from(m)).collect(),
+                metrics: metrics
+                    .drain(..count)
+                    .map(|m| primitive::Metric::from(m))
+                    .collect(),
                 params: Vec::new(),
             };
             let request = request.serialize_json();
@@ -239,6 +260,95 @@ impl super::Storage for Storage {
             validate_response(http_response)?;
         }
         Ok(())
+    }
+}
+
+impl ServerClientStorage {
+    pub fn new(url: &str) -> Self {
+        ServerClientStorage {
+            server: Server::new(url),
+        }
+    }
+}
+impl ClientStorage for ServerClientStorage {
+    fn create_experiment(
+        &mut self,
+        name: &str,
+    ) -> Result<crate::Experiment, CreateExperimentError> {
+        let primitive = self.server.create_experiment(name)?;
+        let storage = ServerExperimentStorage::new(self.server.clone());
+        Ok(crate::Experiment::new(Box::new(storage), primitive))
+    }
+
+    fn list_experiments(&mut self) -> Result<Vec<crate::Experiment>, StorageError> {
+        let primitive = self.server.list_experiments()?;
+        let experiments: Vec<crate::Experiment> = primitive
+            .into_iter()
+            .map(|primitive| {
+                let storage = ServerExperimentStorage::new(self.server.clone());
+                crate::Experiment::new(Box::new(storage), primitive)
+            })
+            .collect();
+        Ok(experiments)
+    }
+
+    fn get_experiment(&mut self, name: &str) -> Result<crate::Experiment, GetExperimentError> {
+        let primitive = self.server.get_experiment(name)?;
+        let storage = ServerExperimentStorage::new(self.server.clone());
+        Ok(crate::Experiment::new(Box::new(storage), primitive))
+    }
+}
+
+impl ServerExperimentStorage {
+    pub fn new(server: Server) -> Self {
+        ServerExperimentStorage { server }
+    }
+}
+impl ExperimentStorage for ServerExperimentStorage {
+    fn create_run(
+        &mut self,
+        experiment: &str,
+        start_time: u64,
+    ) -> Result<crate::Run, StorageError> {
+        let primitive = self.server.create_run(experiment, start_time)?;
+        let storage = ServerRunStorage::new(self.server.clone());
+        Ok(crate::Run::new(Box::new(storage), primitive))
+    }
+}
+
+impl ServerRunStorage {
+    pub fn new(server: Server) -> Self {
+        ServerRunStorage {
+            server,
+            buffer: Vec::with_capacity(1000),
+        }
+    }
+}
+impl RunStorage for ServerRunStorage {
+    fn log_param(&mut self, run: &str, key: &str, value: &str) -> Result<(), StorageError> {
+        self.server.log_param(run, key, value)
+    }
+
+    fn log_metric(
+        &mut self,
+        _run: &str,
+        key: &'static str,
+        value: f64,
+        timestamp: u64,
+        step: u64,
+    ) -> Result<(), StorageError> {
+        self.buffer.push(BufferedMetric {
+            name: key,
+            value,
+            timestamp,
+            step,
+        });
+        Ok(())
+    }
+
+    fn terminate(&mut self, run: &str, end_time: u64) -> Result<(), StorageError> {
+        self.server.log_batch(run, &mut self.buffer)?;
+        self.server.terminate_run(run, end_time)
     }
 }
 

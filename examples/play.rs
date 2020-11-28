@@ -21,8 +21,8 @@ impl Args {
 
 fn main() -> Result<()> {
     let args = Args::from_env()?;
-    let client = Client::for_server("http://127.0.0.1:5000/api");
-    let experiment = if args.create {
+    let mut client = Client::for_server("http://127.0.0.1:5000/api");
+    let mut experiment = if args.create {
         use mlflow::errors::CreateExperimentError;
         let experiment = client.try_create_experiment(&args.experiment);
         match experiment {
@@ -72,7 +72,7 @@ fn main() -> Result<()> {
 
     for i in 0..args.runs {
         println!("Executing run {}", i);
-        let run = experiment.try_create_run()?;
+        let mut run = experiment.try_create_run()?;
         run.log_param("i", &format!("{}", i));
         run.log_param("constant", "42");
         let mut rng = WyRand::new_seed(i.into());
