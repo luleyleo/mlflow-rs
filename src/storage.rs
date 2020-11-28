@@ -8,6 +8,13 @@ pub(crate) use server::Storage as Server;
 
 pub(crate) mod primitive;
 
+pub(crate) struct BufferedMetric {
+    pub name: &'static str,
+    pub value: f64,
+    pub timestamp: u64,
+    pub step: u64,
+}
+
 pub(crate) trait Storage {
     fn create_experiment(&self, name: &str) -> Result<Experiment, CreateExperimentError>;
     fn list_experiments(&self) -> Result<Vec<Experiment>, StorageError>;
@@ -25,4 +32,5 @@ pub(crate) trait Storage {
         time_stamp: u64,
         step: u64,
     ) -> Result<(), StorageError>;
+    fn log_batch(&self, run: &str, metrics: &mut Vec<BufferedMetric>) -> Result<(), StorageError>;
 }

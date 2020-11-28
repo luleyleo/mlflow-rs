@@ -1,11 +1,13 @@
 use crate::storage::{
     errors,
-    primitive::{Experiment, Run},
+    primitive::{Experiment, Run, Metric},
 };
 use anyhow::{anyhow, Context};
 use errors::{CreateExperimentError, GetExperimentError, StorageError};
 use nanoserde::{DeJson, SerJson};
 use std::convert::TryInto;
+
+use super::BufferedMetric;
 
 pub struct Storage {
     endpoints: Endpoints,
@@ -19,6 +21,7 @@ struct Endpoints {
     pub runs_update: String,
     pub runs_log_param: String,
     pub runs_log_metric: String,
+    pub runs_log_batch: String,
 }
 
 impl Storage {
@@ -40,6 +43,7 @@ impl Endpoints {
             runs_update: format!("{}/runs/update", api),
             runs_log_param: format!("{}/runs/log-parameter", api),
             runs_log_metric: format!("{}/runs/log-metric", api),
+            runs_log_batch: format!("{}/runs/log-batch", api),
         }
     }
 }
@@ -219,6 +223,23 @@ impl super::Storage for Storage {
         validate_response(http_response)?;
         Ok(())
     }
+
+    fn log_batch(&self, run: &str, metrics: &mut Vec<BufferedMetric>) -> Result<(), StorageError> {
+        use api::log_batch::Request;
+        while !metrics.is_empty() {
+            let count = usize::min(metrics.len(), 1000);
+            let request = Request {
+                run_id: run.to_string(),
+                metrics: metrics.drain(..count).map(|m| Metric::from(m)).collect(),
+                params: Vec::new(),
+            };
+            let request = request.serialize_json();
+            let endpoint = &self.endpoints.runs_log_batch;
+            let http_response = ureq::post(endpoint).send_string(&request);
+            validate_response(http_response)?;
+        }
+        Ok(())
+    }
 }
 
 mod api {
@@ -338,6 +359,17 @@ mod api {
             pub value: f64,
             pub timestamp: i64,
             pub step: i64,
+        }
+    }
+
+    pub mod log_batch {
+        use super::*;
+
+        #[derive(SerJson)]
+        pub struct Request {
+            pub run_id: String,
+            pub metrics: Vec<Metric>,
+            pub params: Vec<Param>,
         }
     }
 }

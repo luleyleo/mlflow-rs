@@ -1,5 +1,5 @@
 use crate::{
-    storage::{errors::StorageError, primitive},
+    storage::{errors::StorageError, primitive, BufferedMetric},
     Experiment,
 };
 
@@ -13,6 +13,11 @@ pub struct Run<'a> {
     id: String,
 }
 
+pub struct BufferedRun<'a> {
+    inner: Run<'a>,
+    buffer: Vec<BufferedMetric>,
+}
+
 impl<'a> Run<'a> {
     pub(crate) fn new(experiment: &'a Experiment, run: primitive::Run) -> Self {
         Run {
@@ -20,9 +25,13 @@ impl<'a> Run<'a> {
             id: run.info.run_id,
         }
     }
+
+    pub fn buffer(self) -> BufferedRun<'a> {
+        BufferedRun::new(self)
+    }
 }
 
-/// Client methods without error handling.
+/// Run methods without error handling.
 impl Run<'_> {
     pub fn log_param(&self, name: &str, value: &str) {
         self.try_log_param(name, value).unwrap();
@@ -37,7 +46,7 @@ impl Run<'_> {
     }
 }
 
-/// Client methods with error handling.
+/// Run methods with error handling.
 impl Run<'_> {
     pub fn try_log_param(&self, name: &str, value: &str) -> Result<(), StorageError> {
         self.experiment
@@ -65,5 +74,41 @@ impl Run<'_> {
             .client
             .storage
             .terminate_run(&self.id, end_time)
+    }
+}
+
+impl<'a> BufferedRun<'a> {
+    pub fn new(run: Run<'a>) -> Self {
+        BufferedRun {
+            inner: run,
+            buffer: Vec::with_capacity(1000),
+        }
+    }
+
+    pub fn unwrap(self) -> Run<'a> {
+        self.inner
+    }
+}
+
+impl BufferedRun<'_> {
+    pub fn log_metric(&mut self, name: &'static str, value: f64, timestamp: u64, step: u64) {
+        self.buffer.push(BufferedMetric {
+            name,
+            value,
+            timestamp,
+            step,
+        });
+    }
+
+    pub fn submit(&mut self) {
+        self.try_submit().unwrap();
+    }
+
+    pub fn try_submit(&mut self) -> Result<(), StorageError> {
+        self.inner
+            .experiment
+            .client
+            .storage
+            .log_batch(&self.inner.id, &mut self.buffer)
     }
 }
