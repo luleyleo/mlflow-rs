@@ -1,7 +1,6 @@
 use crate::storage::{self, errors, primitive};
 use anyhow::{anyhow, Context};
 use errors::{CreateExperimentError, GetExperimentError, StorageError};
-use nanoserde::{DeJson, SerJson};
 use std::{convert::TryInto, sync::Arc};
 
 pub struct ClientStorage {
@@ -33,6 +32,7 @@ struct Endpoints {
     pub runs_log_batch: String,
 }
 
+#[derive(serde::Serialize)]
 pub struct BufferedMetric {
     pub name: &'static str,
     pub value: f64,
@@ -172,9 +172,12 @@ impl Server {
         name: &str,
     ) -> Result<primitive::Experiment, CreateExperimentError> {
         use api::create_experiment::{Request, Response};
-        let request = Request::new(name.to_string()).serialize_json();
+
+        let request = serde_json::to_string(&Request { name }).context("serializing request")?;
+
         let endpoint = &self.endpoints.experiments_create;
         let http_response = ureq::post(endpoint).send_string(&request);
+
         if http_response.error() {
             let status = http_response.status();
             let body = http_response
@@ -182,8 +185,8 @@ impl Server {
                 .context("turning error response into string")?;
             return Err({
                 if status == 400 {
-                    let response = api::ErrorResponse::deserialize_json(&body)
-                        .context("deserializing error body")?;
+                    let response: api::ErrorResponse =
+                        serde_json::from_str(&body).context("deserializing error body")?;
                     match response.error_code.as_ref() {
                         api::RESOURCE_ALREADY_EXISTS => {
                             CreateExperimentError::AlreadyExists(name.to_string())
@@ -203,10 +206,13 @@ impl Server {
                 }
             });
         }
+
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
-        let _response = Response::deserialize_json(&response_body).context("deserializing json")?;
+        let _response: Response =
+            serde_json::from_str(&response_body).context("deserializing json")?;
+        // TODO: use get_experiment_by_id
         Ok(self.get_experiment(name).unwrap())
     }
 
@@ -218,15 +224,21 @@ impl Server {
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
-        let response = Response::deserialize_json(&response_body).context("deserializing json")?;
+        let response =
+            serde_json::from_str::<Response>(&response_body).context("deserializing json")?;
         Ok(response.experiments)
     }
 
-    fn get_experiment(&self, name: &str) -> Result<primitive::Experiment, GetExperimentError> {
+    fn get_experiment(
+        &self,
+        experiment_name: &str,
+    ) -> Result<primitive::Experiment, GetExperimentError> {
         use api::get_experiment_by_name::{Request, Response};
-        let request = Request::new(name.to_string()).serialize_json();
+        let request =
+            serde_json::to_string(&Request { experiment_name }).context("serializing request")?;
         let endpoint = &self.endpoints.experiments_get;
         let http_response = ureq::get(endpoint).send_string(&request);
+
         if http_response.error() {
             let status = http_response.status();
             let body = http_response
@@ -234,11 +246,11 @@ impl Server {
                 .context("turning error response into string")?;
             return Err({
                 if status == 404 {
-                    let response = api::ErrorResponse::deserialize_json(&body)
+                    let response = serde_json::from_str::<api::ErrorResponse>(&body)
                         .context("deserializing error body")?;
                     match response.error_code.as_ref() {
                         api::RESOURCE_DOES_NOT_EXIST => {
-                            GetExperimentError::DoesNotExist(name.to_string())
+                            GetExperimentError::DoesNotExist(experiment_name.to_string())
                         }
                         code => GetExperimentError::Storage(anyhow!(
                             "Unknown error code {}. Message: {}",
@@ -255,10 +267,12 @@ impl Server {
                 }
             });
         }
+
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
-        let response = Response::deserialize_json(&response_body).context("deserializing json")?;
+        let response: Response =
+            serde_json::from_str(&response_body).context("deserializing json")?;
         Ok(response.experiment)
     }
 
@@ -269,30 +283,31 @@ impl Server {
     ) -> Result<primitive::Run, StorageError> {
         use api::create_run::{Request, Response};
         let request = Request {
-            experiment_id: experiment.to_string(),
-            user_id: "mlflow-rs".to_string(),
+            experiment_id: experiment,
+            user_id: "mlflow-rs",
             start_time: start_time.try_into()?,
-            tags: Vec::new(),
+            tags: &[],
         };
-        let request = request.serialize_json();
+        let request = serde_json::to_string(&request).context("serializing request")?;
         let endpoint = &self.endpoints.runs_create;
         let http_response = ureq::post(endpoint).send_string(&request);
         let http_response = validate_response(http_response)?;
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
-        let response = Response::deserialize_json(&response_body).context("deserializing json")?;
+        let response =
+            serde_json::from_str::<Response>(&response_body).context("deserializing json")?;
         Ok(response.run)
     }
 
     fn terminate_run(&self, run: &str, end_time: u64) -> Result<(), StorageError> {
         use api::update_run::Request;
         let request = Request {
-            run_id: run.to_string(),
-            status: "FINISHED".to_string(),
+            run_id: run,
+            status: "FINISHED",
             end_time: end_time.try_into()?,
         };
-        let request = request.serialize_json();
+        let request = serde_json::to_string(&request).context("serializing request")?;
         let endpoint = &self.endpoints.runs_update;
         let http_response = ureq::post(endpoint).send_string(&request);
         validate_response(http_response)?;
@@ -302,11 +317,11 @@ impl Server {
     fn log_param(&self, run: &str, key: &str, value: &str) -> Result<(), StorageError> {
         use api::log_param::Request;
         let request = Request {
-            run_id: run.to_string(),
-            key: key.to_string(),
-            value: value.to_string(),
+            run_id: run,
+            key: key,
+            value: value,
         };
-        let request = request.serialize_json();
+        let request = serde_json::to_string(&request).context("serializing request")?;
         let endpoint = &self.endpoints.runs_log_param;
         let http_response = ureq::post(endpoint).send_string(&request);
         validate_response(http_response)?;
@@ -324,13 +339,13 @@ impl Server {
     ) -> Result<(), StorageError> {
         use api::log_metric::Request;
         let request = Request {
-            run_id: run.to_string(),
-            key: key.to_string(),
+            run_id: run,
+            key,
             value,
             timestamp: time_stamp.try_into()?,
             step: step.try_into()?,
         };
-        let request = request.serialize_json();
+        let request = serde_json::to_string(&request).context("serializing request")?;
         let endpoint = &self.endpoints.runs_log_metric;
         let http_response = ureq::post(endpoint).send_string(&request);
         validate_response(http_response)?;
@@ -342,11 +357,11 @@ impl Server {
         while !metrics.is_empty() {
             let count = usize::min(metrics.len(), 1000);
             let request = Request {
-                run_id: run.to_string(),
-                metrics: metrics.drain(..count).map(Into::into).collect(),
-                params: Vec::new(),
+                run_id: run,
+                metrics: &metrics[..count],
+                params: &[],
             };
-            let request = request.serialize_json();
+            let request = serde_json::to_string(&request).context("serializing request")?;
             let endpoint = &self.endpoints.runs_log_batch;
             let http_response = ureq::post(endpoint).send_string(&request);
             validate_response(http_response)?;
@@ -357,7 +372,7 @@ impl Server {
 
 mod api {
     use crate::storage::primitive::*;
-    use nanoserde::{DeJson, SerJson};
+    use serde::{Deserialize, Serialize};
 
     use super::BufferedMetric;
 
@@ -376,36 +391,30 @@ mod api {
         }
     }
 
-    #[derive(DeJson)]
-    pub struct ErrorResponse {
-        pub error_code: String,
-        pub message: String,
+    #[derive(Deserialize)]
+    pub struct ErrorResponse<'a> {
+        pub error_code: &'a str,
+        pub message: &'a str,
     }
 
     pub mod create_experiment {
         use super::*;
 
-        #[derive(SerJson)]
-        pub struct Request {
-            pub name: String,
+        #[derive(Serialize)]
+        pub struct Request<'a> {
+            pub name: &'a str,
         }
 
-        impl Request {
-            pub fn new(name: String) -> Self {
-                Request { name }
-            }
-        }
-
-        #[derive(DeJson)]
-        pub struct Response {
-            pub experiment_id: String,
+        #[derive(Deserialize)]
+        pub struct Response<'a> {
+            pub experiment_id: &'a str,
         }
     }
 
     pub mod list_experiments {
         use super::*;
 
-        #[derive(DeJson)]
+        #[derive(Deserialize)]
         pub struct Response {
             pub experiments: Vec<Experiment>,
         }
@@ -414,18 +423,12 @@ mod api {
     pub mod get_experiment_by_name {
         use super::*;
 
-        #[derive(SerJson)]
-        pub struct Request {
-            pub experiment_name: String,
+        #[derive(Serialize)]
+        pub struct Request<'a> {
+            pub experiment_name: &'a str,
         }
 
-        impl Request {
-            pub fn new(experiment_name: String) -> Self {
-                Request { experiment_name }
-            }
-        }
-
-        #[derive(DeJson)]
+        #[derive(Deserialize)]
         pub struct Response {
             pub experiment: Experiment,
         }
@@ -434,15 +437,15 @@ mod api {
     pub mod create_run {
         use super::*;
 
-        #[derive(SerJson)]
-        pub struct Request {
-            pub experiment_id: String,
-            pub user_id: String,
+        #[derive(Serialize)]
+        pub struct Request<'a> {
+            pub experiment_id: &'a str,
+            pub user_id: &'a str,
             pub start_time: i64,
-            pub tags: Vec<RunTag>,
+            pub tags: &'a [RunTag],
         }
 
-        #[derive(DeJson)]
+        #[derive(Deserialize)]
         pub struct Response {
             pub run: Run,
         }
@@ -451,14 +454,14 @@ mod api {
     pub mod update_run {
         use super::*;
 
-        #[derive(SerJson)]
-        pub struct Request {
-            pub run_id: String,
-            pub status: String,
+        #[derive(Serialize)]
+        pub struct Request<'a> {
+            pub run_id: &'a str,
+            pub status: &'a str,
             pub end_time: i64,
         }
 
-        #[derive(DeJson)]
+        #[derive(Deserialize)]
         pub struct Response {
             pub run_info: RunInfo,
         }
@@ -467,21 +470,21 @@ mod api {
     pub mod log_param {
         use super::*;
 
-        #[derive(SerJson)]
-        pub struct Request {
-            pub run_id: String,
-            pub key: String,
-            pub value: String,
+        #[derive(Serialize)]
+        pub struct Request<'a> {
+            pub run_id: &'a str,
+            pub key: &'a str,
+            pub value: &'a str,
         }
     }
 
     pub mod log_metric {
         use super::*;
 
-        #[derive(SerJson)]
-        pub struct Request {
-            pub run_id: String,
-            pub key: String,
+        #[derive(Serialize)]
+        pub struct Request<'a> {
+            pub run_id: &'a str,
+            pub key: &'a str,
             pub value: f64,
             pub timestamp: i64,
             pub step: i64,
@@ -491,11 +494,11 @@ mod api {
     pub mod log_batch {
         use super::*;
 
-        #[derive(SerJson)]
-        pub struct Request {
-            pub run_id: String,
-            pub metrics: Vec<Metric>,
-            pub params: Vec<Param>,
+        #[derive(Serialize)]
+        pub struct Request<'a> {
+            pub run_id: &'a str,
+            pub metrics: &'a [BufferedMetric],
+            pub params: &'a [Param],
         }
     }
 }

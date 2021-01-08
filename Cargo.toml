@@ -11,9 +11,10 @@ categories = ["api-bindings", "science", "visualization"]
 
 [dependencies]
 anyhow = "1.0.34"
-nanoserde = "0.1.20"
+serde = { version = "1.0.118", features = ["derive"] }
+serde_json = "1.0.61"
 thiserror = "1.0.22"
-ureq = { version = "1.5.2", default-features=false, features=["tls"] }
+ureq = { version = "1.5.2", default-features=false, features=["tls", "json"] }
 
 [dev-dependencies]
 nanorand = "0.4.4"

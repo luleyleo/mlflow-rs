@@ -1,8 +1,8 @@
-use nanoserde::{DeJson, SerJson};
+use serde::{Deserialize, Serialize};
 
 type Int64 = i64;
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Experiment {
     pub experiment_id: String,
     pub name: String,
@@ -13,20 +13,20 @@ pub struct Experiment {
     pub tags: Option<Vec<ExperimentTag>>,
 }
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ExperimentTag {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct FileInfo {
     pub path: String,
     pub is_dir: bool,
     pub file_size: Int64,
 }
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Metric {
     pub key: String,
     pub value: f64,
@@ -34,26 +34,26 @@ pub struct Metric {
     pub step: Int64,
 }
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Param {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Run {
     pub info: RunInfo,
     pub data: RunData,
 }
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RunData {
     pub metrics: Option<Vec<Metric>>,
     pub params: Option<Vec<Param>>,
     pub tags: Option<Vec<RunTag>>,
 }
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RunInfo {
     pub run_id: String,
     #[deprecated = "This field will be removed in a future FLflow version"]
@@ -68,7 +68,7 @@ pub struct RunInfo {
     pub lifecycle_stage: String,
 }
 
-#[derive(Debug, SerJson, DeJson)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RunTag {
     pub key: String,
     pub value: String,
