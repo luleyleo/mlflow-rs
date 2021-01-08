@@ -1,5 +1,5 @@
 use crate::storage::{self, errors, primitive};
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use errors::{CreateExperimentError, GetExperimentError, StorageError};
 use std::{convert::TryInto, sync::Arc};
 
@@ -64,17 +64,39 @@ impl Endpoints {
     }
 }
 
-fn validate_response(response: ureq::Response) -> Result<ureq::Response, StorageError> {
+fn validate_response(response: ureq::Response) -> Result<ureq::Response, api::ResponseError> {
     if response.error() {
         let status = response.status();
-        let body = response.into_string()?;
-        return Err(anyhow::anyhow!(
-            "request failed with status code {}. Body: {}",
-            status,
-            body
-        ));
+        let body = response
+            .into_string()
+            .unwrap_or_else(|_| "Could not turn body into String.".to_string());
+        let response = serde_json::from_str::<api::ErrorResponse>(&body).ok();
+        if let Some(response) = response {
+            match status {
+                400 => match response.error_code.as_ref() {
+                    api::RESOURCE_ALREADY_EXISTS => Err(api::ResponseError::ResourceAlreadyExists),
+                    code => Err(api::ResponseError::UnknownCode {
+                        status,
+                        code: code.to_owned(),
+                        body,
+                    }),
+                },
+                404 => match response.error_code.as_ref() {
+                    api::RESOURCE_DOES_NOT_EXIST => Err(api::ResponseError::ResourceDoesNotExist),
+                    code => Err(api::ResponseError::UnknownCode {
+                        status,
+                        code: code.to_owned(),
+                        body,
+                    }),
+                },
+                _ => Err(api::ResponseError::Unknown { status, body }),
+            }
+        } else {
+            Err(api::ResponseError::Unknown { status, body })
+        }
+    } else {
+        Ok(response)
     }
-    Ok(response)
 }
 
 impl ClientStorage {
@@ -174,44 +196,23 @@ impl Server {
         use api::create_experiment::{Request, Response};
 
         let request = serde_json::to_string(&Request { name }).context("serializing request")?;
-
         let endpoint = &self.endpoints.experiments_create;
         let http_response = ureq::post(endpoint).send_string(&request);
 
-        if http_response.error() {
-            let status = http_response.status();
-            let body = http_response
-                .into_string()
-                .context("turning error response into string")?;
-            return Err({
-                if status == 400 {
-                    let response: api::ErrorResponse =
-                        serde_json::from_str(&body).context("deserializing error body")?;
-                    match response.error_code.as_ref() {
-                        api::RESOURCE_ALREADY_EXISTS => {
-                            CreateExperimentError::AlreadyExists(name.to_string())
-                        }
-                        code => CreateExperimentError::Storage(anyhow!(
-                            "Unknown error code {}. Message: {}",
-                            code,
-                            response.message
-                        )),
-                    }
-                } else {
-                    CreateExperimentError::Storage(anyhow!(
-                        "request failed with status code {}. Body: {}",
-                        status,
-                        body
-                    ))
-                }
-            });
-        }
+        let http_response = match validate_response(http_response) {
+            Ok(response) => response,
+            Err(api::ResponseError::ResourceAlreadyExists) => {
+                return Err(CreateExperimentError::AlreadyExists(name.to_string()))
+            }
+            Err(err) => return Err(CreateExperimentError::Storage(err.into())),
+        };
 
         let response_body = http_response
             .into_string()
             .context("turning response body into string")?;
         let _response: Response =
             serde_json::from_str(&response_body).context("deserializing json")?;
+
         // TODO: use get_experiment_by_id
         Ok(self.get_experiment(name).unwrap())
     }
@@ -239,34 +240,15 @@ impl Server {
         let endpoint = &self.endpoints.experiments_get;
         let http_response = ureq::get(endpoint).send_string(&request);
 
-        if http_response.error() {
-            let status = http_response.status();
-            let body = http_response
-                .into_string()
-                .context("turning error response into string")?;
-            return Err({
-                if status == 404 {
-                    let response = serde_json::from_str::<api::ErrorResponse>(&body)
-                        .context("deserializing error body")?;
-                    match response.error_code.as_ref() {
-                        api::RESOURCE_DOES_NOT_EXIST => {
-                            GetExperimentError::DoesNotExist(experiment_name.to_string())
-                        }
-                        code => GetExperimentError::Storage(anyhow!(
-                            "Unknown error code {}. Message: {}",
-                            code,
-                            response.message
-                        )),
-                    }
-                } else {
-                    GetExperimentError::Storage(anyhow!(
-                        "request failed with status code {}. Body: {}",
-                        status,
-                        body
-                    ))
-                }
-            });
-        }
+        let http_response = match validate_response(http_response) {
+            Ok(response) => response,
+            Err(api::ResponseError::ResourceDoesNotExist) => {
+                return Err(GetExperimentError::DoesNotExist(
+                    experiment_name.to_string(),
+                ))
+            }
+            Err(err) => return Err(GetExperimentError::Storage(err.into())),
+        };
 
         let response_body = http_response
             .into_string()
@@ -389,6 +371,22 @@ mod api {
                 step: self.step as i64,
             }
         }
+    }
+
+    #[derive(thiserror::Error, Debug)]
+    pub enum ResponseError {
+        #[error("the resource already exists")]
+        ResourceAlreadyExists,
+        #[error("the resource does not exist")]
+        ResourceDoesNotExist,
+        #[error("unknown error code {code} in {status} response. message: {body}")]
+        UnknownCode {
+            status: u16,
+            code: String,
+            body: String,
+        },
+        #[error("unknown error {status}. message: {body}")]
+        Unknown { status: u16, body: String },
     }
 
     #[derive(Deserialize)]
