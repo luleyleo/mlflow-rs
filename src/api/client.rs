@@ -1,9 +1,13 @@
 use crate::api::{error::*, experiment::*, id::*, run::*};
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ViewType {
+    #[serde(rename = "ACTIVE_ONLY")]
     Active,
+    #[serde(rename = "DELETED_ONLY")]
     Deleted,
+    #[serde(rename = "ALL")]
     All,
 }
 
