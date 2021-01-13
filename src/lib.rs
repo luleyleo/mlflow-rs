@@ -13,9 +13,10 @@ pub mod backend;
 //pub use storage::errors;
 
 pub use api::id::{ExperimentId, RunId};
+pub use api::client::Client;
 
 /// Utility function to create a MLflow timestamp.
-pub fn timestamp() -> u64 {
+pub fn timestamp() -> i64 {
     use std::convert::TryInto;
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

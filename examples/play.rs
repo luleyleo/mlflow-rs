@@ -1,5 +1,5 @@
 use anyhow::Result;
-use mlflow::{timestamp, Client};
+use mlflow::{Client, api::run::RunStatus, backend, timestamp};
 use nanorand::{WyRand, RNG};
 
 struct Args {
@@ -21,44 +21,63 @@ impl Args {
 
 fn main() -> Result<()> {
     let args = Args::from_env()?;
-    let mut client = Client::for_server("http://127.0.0.1:5000/api");
-    let mut experiment = if args.create {
-        use mlflow::errors::CreateExperimentError;
-        let experiment = client.try_create_experiment(&args.experiment);
-        match experiment {
-            Ok(experiment) => {
+    let mut client = backend::rest::Server::new("http://127.0.0.1:5000/api");
+    let experiment = if args.create {
+        use mlflow::api::error::{CreateError, GetError};
+        let experiment_id = client.create_experiment(&args.experiment);
+        match experiment_id.as_ref() {
+            Ok(experiment_id) => {
                 println!(
-                    "Experiment {} with id {} was created successfully!",
-                    experiment.name(),
-                    experiment.id()
+                    "Experiment with id {} was created successfully!",
+                    experiment_id.as_ref()
                 );
-                experiment
             }
-            Err(CreateExperimentError::AlreadyExists(name)) => {
+            Err(CreateError::AlreadyExists(name)) => {
                 println!("The experiment {} already exists.", name);
                 println!(
                     "Run again without the -c or --create flag to fetch the existing experiment."
                 );
                 return Ok(());
             }
-            Err(CreateExperimentError::Storage(err)) => {
+            Err(CreateError::Storage(err)) => {
                 println!("Failed to create experiment:\n {}", err);
                 return Ok(());
             }
         }
+        let experiment = client.get_experiment(&experiment_id.unwrap());
+        match experiment {
+            Ok(experiment) => {
+                println!(
+                    "Experiment {} was requested successfully!",
+                    experiment.name
+                );
+                experiment
+            }
+            Err(GetError::DoesNotExist(name)) => {
+                println!("The experiment {} does not exists.", name);
+                println!(
+                    "Run again with the -c or --create flag to create a new experiment."
+                );
+                return Ok(());
+            }
+            Err(GetError::Storage(err)) => {
+                println!("Failed to get experiment:\n {}", err);
+                return Ok(());
+            }
+        }
     } else {
-        use mlflow::errors::GetExperimentError;
-        let experiment = client.try_get_experiment(&args.experiment);
+        use mlflow::api::error::GetError;
+        let experiment = client.get_experiment_by_name(&args.experiment);
         match experiment {
             Ok(experiment) => {
                 println!(
                     "Experiment {} with id {} was fetched successfully!",
-                    experiment.name(),
-                    experiment.id()
+                    experiment.name,
+                    experiment.experiment_id.as_ref(),
                 );
                 experiment
             }
-            Err(GetExperimentError::DoesNotExist(name)) => {
+            Err(GetError::DoesNotExist(name)) => {
                 println!("The experiment {} does not exists.", name);
                 println!("Run again with the -c or --create flag to create a new experiment.");
                 return Ok(());
@@ -72,17 +91,17 @@ fn main() -> Result<()> {
 
     for i in 0..args.runs {
         println!("Executing run {}", i);
-        let mut run = experiment.try_create_run()?;
-        run.log_param("i", &format!("{}", i));
-        run.log_param("constant", "42");
+        let run = client.create_run(&experiment.experiment_id, timestamp(), &[])?;
+        client.log_param(&run.info.run_id, "i", &format!("{}", i))?;
+        client.log_param(&run.info.run_id, "constant", "42")?;
         let mut rng = WyRand::new_seed(i.into());
         for s in 0..10 {
             let int: f64 = rng.generate::<u16>().into();
             let max: f64 = std::u16::MAX.into();
             let value = int / max;
-            run.log_metric("rand", value, timestamp(), s);
+            client.log_metric(&run.info.run_id,"rand", value, timestamp(), s)?;
         }
-        run.terminate();
+        client.update_run(&run.info.run_id, RunStatus::Finished, timestamp())?;
     }
 
     Ok(())

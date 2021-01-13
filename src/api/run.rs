@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-use crate::{ExperimentId, RunId};
+use crate::{ExperimentId, RunId, api::{str_int, opt_str_int}};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Metric {
@@ -38,7 +38,9 @@ pub struct RunInfo {
     #[deprecated = "This field will be removed in a future FLflow version"]
     pub user_id: String,
     pub status: RunStatus,
-    pub start_time: String,
+    #[serde(with = "str_int")]
+    pub start_time: i64,
+    #[serde(default, with = "opt_str_int")]
     pub end_time: Option<i64>,
     pub artifact_uri: String,
     pub lifecycle_stage: String,
