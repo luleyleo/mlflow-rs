@@ -1,16 +1,6 @@
-//mod client;
-//mod experiment;
-//mod storage;
-
 pub mod api;
 //pub mod tracking;
 pub mod backend;
-
-//pub use client::Client;
-//pub use experiment::Experiment;
-
-/// All the errors.
-//pub use storage::errors;
 
 pub use api::id::{ExperimentId, RunId};
 pub use api::client::Client;
