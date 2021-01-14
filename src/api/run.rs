@@ -1,8 +1,11 @@
 use std::borrow::Cow;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::{ExperimentId, RunId, api::{str_int, opt_str_int}};
+use crate::{
+    api::{opt_str_int, str_int},
+    ExperimentId, RunId,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Metric<'a> {

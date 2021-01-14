@@ -1,5 +1,5 @@
 use anyhow::Result;
-use mlflow::{Client, api::run::RunStatus, backend, timestamp};
+use mlflow::{api::run::RunStatus, backend, timestamp, Client};
 use nanorand::{WyRand, RNG};
 
 struct Args {
@@ -27,16 +27,11 @@ fn main() -> Result<()> {
         let experiment_id = client.create_experiment(&args.experiment);
         match experiment_id.as_ref() {
             Ok(experiment_id) => {
-                println!(
-                    "Experiment with id {} was created successfully!",
-                    experiment_id.as_ref()
-                );
+                println!("Experiment with id {} was created successfully!", experiment_id.as_ref());
             }
             Err(CreateError::AlreadyExists(name)) => {
                 println!("The experiment {} already exists.", name);
-                println!(
-                    "Run again without the -c or --create flag to fetch the existing experiment."
-                );
+                println!("Run again without the -c or --create flag to fetch the existing experiment.");
                 return Ok(());
             }
             Err(CreateError::Storage(err)) => {
@@ -47,17 +42,12 @@ fn main() -> Result<()> {
         let experiment = client.get_experiment(&experiment_id.unwrap());
         match experiment {
             Ok(experiment) => {
-                println!(
-                    "Experiment {} was requested successfully!",
-                    experiment.name
-                );
+                println!("Experiment {} was requested successfully!", experiment.name);
                 experiment
             }
             Err(GetError::DoesNotExist(name)) => {
                 println!("The experiment {} does not exists.", name);
-                println!(
-                    "Run again with the -c or --create flag to create a new experiment."
-                );
+                println!("Run again with the -c or --create flag to create a new experiment.");
                 return Ok(());
             }
             Err(GetError::Storage(err)) => {
@@ -99,7 +89,7 @@ fn main() -> Result<()> {
             let int: f64 = rng.generate::<u16>().into();
             let max: f64 = std::u16::MAX.into();
             let value = int / max;
-            client.log_metric(&run.info.run_id,"rand", value, timestamp(), s)?;
+            client.log_metric(&run.info.run_id, "rand", value, timestamp(), s)?;
         }
         client.update_run(&run.info.run_id, RunStatus::Finished, timestamp())?;
     }

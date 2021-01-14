@@ -1,4 +1,13 @@
-use crate::{ExperimentId, RunId, api::{client::{Client, ViewType}, error::{BatchError, CreateError, DeleteError, GetError, StorageError, UpdateError}, experiment::Experiment, limits, run::{Metric, Param, Run, RunInfo, RunStatus, RunTag}}};
+use crate::{
+    api::{
+        client::{Client, ViewType},
+        error::{BatchError, CreateError, DeleteError, GetError, StorageError, UpdateError},
+        experiment::Experiment,
+        limits,
+        run::{Metric, Param, Run, RunInfo, RunStatus, RunTag},
+    },
+    ExperimentId, RunId,
+};
 use anyhow::{Context, Error};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -83,8 +92,8 @@ impl Server {
             Err(error_handler(error))
         } else {
             let response_string = http_response.into_string().context("failed to turn response into string")?;
-            let response = Ep::read_response_string(&response_string)
-                .with_context(|| format!("deserializing response failed:\n{}", &response_string))?;
+            let response =
+                Ep::read_response_string(&response_string).with_context(|| format!("deserializing response failed:\n{}", &response_string))?;
             let value = Ep::extract(response);
             Ok(value)
         }
@@ -150,7 +159,11 @@ impl Client for Server {
     }
 
     fn create_run(&mut self, experiment_id: &ExperimentId, start_time: i64, tags: &[RunTag]) -> Result<Run, StorageError> {
-        let request = CreateRun { experiment_id, start_time, tags };
+        let request = CreateRun {
+            experiment_id,
+            start_time,
+            tags,
+        };
         self.execute(request, StorageError::from)
     }
 
@@ -163,7 +176,11 @@ impl Client for Server {
     }
 
     fn update_run(&mut self, id: &RunId, status: RunStatus, end_time: i64) -> Result<RunInfo, UpdateError> {
-        let request = UpdateRun { run_id: id, status, end_time};
+        let request = UpdateRun {
+            run_id: id,
+            status,
+            end_time,
+        };
         self.execute(request, |error| match error {
             RestError::Known {
                 code: RestErrorCode::ResourceDoesNotExist,
@@ -179,7 +196,13 @@ impl Client for Server {
     }
 
     fn log_metric(&mut self, run_id: &RunId, key: &str, value: f64, timestamp: i64, step: i64) -> Result<(), StorageError> {
-        let request = LogMetric { run_id, key, value, timestamp, step };
+        let request = LogMetric {
+            run_id,
+            key,
+            value,
+            timestamp,
+            step,
+        };
         self.execute(request, StorageError::from)
     }
 
@@ -197,7 +220,12 @@ impl Client for Server {
         if total_len > limits::BATCH_TOTAL {
             return Err(BatchError::ToManyItems(total_len));
         }
-        let request = LogBatch { run_id: run, metrics, params, tags };
+        let request = LogBatch {
+            run_id: run,
+            metrics,
+            params,
+            tags,
+        };
         self.execute(request, |err| BatchError::Storage(err.into()))
     }
 }

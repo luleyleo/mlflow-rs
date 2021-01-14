@@ -1,8 +1,7 @@
-
 pub mod client;
 pub mod error;
-pub mod id;
 pub mod experiment;
+pub mod id;
 pub mod metric;
 pub mod run;
 
@@ -22,7 +21,7 @@ mod str_int {
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<i64, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
         i64::from_str(&s).map_err(de::Error::custom)
@@ -45,9 +44,9 @@ mod opt_str_int {
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
-        let s  = Option::<String>::deserialize(deserializer)?;
+        let s = Option::<String>::deserialize(deserializer)?;
         if let Some(s) = s {
             Ok(Some(i64::from_str(&s).map_err(de::Error::custom)?))
         } else {
