@@ -21,13 +21,13 @@ pub enum GetError {
 #[derive(Error, Debug)]
 pub enum BatchError {
     #[error("only up to 1000 items can be logged at once, found {0}")]
-    ToManyItems(u32),
+    ToManyItems(usize),
     #[error("only up to 1000 metrics can be logged at once, found {0}")]
-    ToManyMetrics(u32),
+    ToManyMetrics(usize),
     #[error("only up to 100 params can be logged at once, found {0}")]
-    ToManyParams(u32),
+    ToManyParams(usize),
     #[error("only up to 100 tags can be logged at once, found {0}")]
-    ToManyTags(u32),
+    ToManyTags(usize),
     #[error("an error ocurred in the storage backend: {0:?}")]
     Storage(#[from] StorageError),
 }

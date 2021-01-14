@@ -1,5 +1,5 @@
 pub mod api;
-//pub mod tracking;
+pub mod tracking;
 pub mod backend;
 
 pub use api::id::{ExperimentId, RunId};

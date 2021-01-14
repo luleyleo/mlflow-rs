@@ -1,10 +1,12 @@
+use std::borrow::Cow;
+
 use serde::{Serialize, Deserialize};
 
 use crate::{ExperimentId, RunId, api::{str_int, opt_str_int}};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Metric {
-    pub key: String,
+pub struct Metric<'a> {
+    pub key: Cow<'a, str>,
     pub value: f64,
     pub timestamp: i64,
     pub step: i64,
@@ -24,7 +26,7 @@ pub struct Run {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RunData {
-    pub metrics: Option<Vec<Metric>>,
+    pub metrics: Option<Vec<Metric<'static>>>,
     pub params: Option<Vec<Param>>,
     pub tags: Option<Vec<RunTag>>,
 }

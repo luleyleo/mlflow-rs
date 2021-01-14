@@ -1,9 +1,4 @@
-use crate::{ExperimentId, RunId, api::{
-        client::{Client, ViewType},
-        error::{BatchError, CreateError, DeleteError, GetError, StorageError, UpdateError},
-        experiment::Experiment,
-        run::{Metric, Param, Run, RunInfo, RunStatus, RunTag},
-    }};
+use crate::{ExperimentId, RunId, api::{client::{Client, ViewType}, error::{BatchError, CreateError, DeleteError, GetError, StorageError, UpdateError}, experiment::Experiment, limits, run::{Metric, Param, Run, RunInfo, RunStatus, RunTag}}};
 use anyhow::{Context, Error};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -189,7 +184,21 @@ impl Client for Server {
     }
 
     fn log_batch(&mut self, run: &RunId, metrics: &[Metric], params: &[Param], tags: &[RunTag]) -> Result<(), BatchError> {
-        todo!()
+        if metrics.len() > limits::BATCH_METRICS {
+            return Err(BatchError::ToManyMetrics(metrics.len()));
+        }
+        if params.len() > limits::BATCH_PARAMS {
+            return Err(BatchError::ToManyParams(params.len()));
+        }
+        if tags.len() > limits::BATCH_TAGS {
+            return Err(BatchError::ToManyTags(tags.len()));
+        }
+        let total_len = metrics.len() + params.len() + tags.len();
+        if total_len > limits::BATCH_TOTAL {
+            return Err(BatchError::ToManyItems(total_len));
+        }
+        let request = LogBatch { run_id: run, metrics, params, tags };
+        self.execute(request, |err| BatchError::Storage(err.into()))
     }
 }
 
@@ -401,6 +410,18 @@ impl Endpoint for UpdateRun<'_> {
     fn extract(response: Self::Response) -> Self::Value {
         response.run_info
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+struct LogBatch<'a> {
+    run_id: &'a RunId,
+    metrics: &'a [Metric<'a>],
+    params: &'a [Param],
+    tags: &'a [RunTag],
+}
+impl VoidEndpoint for LogBatch<'_> {
+    const PATH: &'static str = "2.0/mlflow/runs/log-batch";
+    const METHOD: fn(&str) -> ureq::Request = ureq::post;
 }
 
 #[cfg(test)]

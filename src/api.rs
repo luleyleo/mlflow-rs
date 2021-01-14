@@ -6,6 +6,13 @@ pub mod experiment;
 pub mod metric;
 pub mod run;
 
+pub mod limits {
+    pub const BATCH_TOTAL: usize = 1000;
+    pub const BATCH_METRICS: usize = 1000;
+    pub const BATCH_PARAMS: usize = 100;
+    pub const BATCH_TAGS: usize = 100;
+}
+
 // serialize i64 as str
 mod str_int {
     use std::str::FromStr;
