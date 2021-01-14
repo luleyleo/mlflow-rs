@@ -1,5 +1,5 @@
 use anyhow::Result;
-use mlflow::{api::run::RunStatus, backend, timestamp, Client};
+use mlflow::{backend, tracking::TrackingRun, Client};
 use nanorand::{WyRand, RNG};
 
 struct Args {
@@ -81,17 +81,17 @@ fn main() -> Result<()> {
 
     for i in 0..args.runs {
         println!("Executing run {}", i);
-        let run = client.create_run(&experiment.experiment_id, timestamp(), &[])?;
-        client.log_param(&run.info.run_id, "i", &format!("{}", i))?;
-        client.log_param(&run.info.run_id, "constant", "42")?;
+        let mut run = TrackingRun::new();
+        run.log_param("i", &format!("{}", i));
+        run.log_param("constant", "42");
         let mut rng = WyRand::new_seed(i.into());
         for s in 0..10 {
             let int: f64 = rng.generate::<u16>().into();
             let max: f64 = std::u16::MAX.into();
             let value = int / max;
-            client.log_metric(&run.info.run_id, "rand", value, timestamp(), s)?;
+            run.log_metric("rand", value, s);
         }
-        client.update_run(&run.info.run_id, RunStatus::Finished, timestamp())?;
+        run.submit(&mut client, &experiment.experiment_id)?;
     }
 
     Ok(())

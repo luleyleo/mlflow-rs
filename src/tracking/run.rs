@@ -1,3 +1,5 @@
+use std::{borrow::Cow, fmt::Display};
+
 use crate::{
     api::{
         error::StorageError,
@@ -29,26 +31,40 @@ impl<'b> TrackingRun<'b> {
         }
     }
 
-    pub fn log_param(&mut self, param: Param) {
+    pub fn log_param(&mut self, key: impl Into<String>, value: impl Display) {
         assert!(
             self.param_buffer.len() < limits::BATCH_PARAMS,
             "TrackingRun supports only up to 100 params for now"
         );
+        let param = Param {
+            key: key.into(),
+            value: format!("{}", value),
+        };
         self.param_buffer.push(param);
     }
 
-    pub fn log_tag(&mut self, tag: RunTag) {
+    pub fn log_tag(&mut self, key: impl Into<String>, value: impl Display) {
         assert!(
             self.tag_buffer.len() < limits::BATCH_TAGS,
             "TrackingRun supports only up to 100 tags for now"
         );
+        let tag = RunTag {
+            key: key.into(),
+            value: format!("{}", value),
+        };
         self.tag_buffer.push(tag);
     }
 
-    pub fn log_metric(&mut self, metric: Metric<'b>) {
+    pub fn log_metric(&mut self, key: impl Into<Cow<'b, str>>, value: f64, step: i64) {
         if self.metric_buffer.last().unwrap().len() == limits::BATCH_METRICS {
             self.metric_buffer.push(Vec::with_capacity(limits::BATCH_METRICS));
         }
+        let metric = Metric {
+            key: key.into(),
+            value,
+            timestamp: timestamp(),
+            step,
+        };
         self.metric_buffer.last_mut().unwrap().push(metric);
     }
 
