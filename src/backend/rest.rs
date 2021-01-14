@@ -155,7 +155,8 @@ impl Client for Server {
     }
 
     fn update_experiment(&mut self, id: &ExperimentId, new_name: Option<&str>) -> Result<(), StorageError> {
-        todo!()
+        let request = UpdateExperiment { experiment_id: id, new_name };
+        self.execute(request, StorageError::from)
     }
 
     fn create_run(&mut self, experiment_id: &ExperimentId, start_time: i64, tags: &[RunTag]) -> Result<Run, StorageError> {
@@ -168,11 +169,25 @@ impl Client for Server {
     }
 
     fn delete_run(&mut self, id: &RunId) -> Result<(), DeleteError> {
-        todo!()
+        let request = DeleteRun { run_id: id };
+        self.execute(request, |error| match error {
+            RestError::Known {
+                code: RestErrorCode::ResourceDoesNotExist,
+                ..
+            } => GetError::DoesNotExist(id.as_ref().to_string()),
+            _ => GetError::Storage(error.into()),
+        })
     }
 
     fn get_run(&mut self, id: &RunId) -> Result<Run, GetError> {
-        todo!()
+        let request = GetRun { run_id: id };
+        self.execute(request, |error| match error {
+            RestError::Known {
+                code: RestErrorCode::ResourceDoesNotExist,
+                ..
+            } => GetError::DoesNotExist(id.as_ref().to_string()),
+            _ => GetError::Storage(error.into()),
+        })
     }
 
     fn update_run(&mut self, id: &RunId, status: RunStatus, end_time: i64) -> Result<RunInfo, UpdateError> {
@@ -332,6 +347,16 @@ impl Endpoint for GetExperiment<'_> {
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
+struct UpdateExperiment<'a> {
+    pub experiment_id: &'a ExperimentId,
+    pub new_name: Option<&'a str>,
+}
+impl VoidEndpoint for UpdateExperiment<'_> {
+    const PATH: &'static str = "2.0/mlflow/experiments/update";
+    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
 struct ListExperiments {
     pub view_type: ViewType,
 }
@@ -381,13 +406,37 @@ struct CreateRun<'a> {
     pub tags: &'a [RunTag],
 }
 #[derive(Deserialize)]
-struct CreateRunResponse {
+struct GetRunResponse {
     run: Run,
 }
 impl Endpoint for CreateRun<'_> {
     const PATH: &'static str = "2.0/mlflow/runs/create";
     const METHOD: fn(&str) -> ureq::Request = ureq::post;
-    type Response = CreateRunResponse;
+    type Response = GetRunResponse;
+    type Value = Run;
+
+    fn extract(response: Self::Response) -> Self::Value {
+        response.run
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+struct DeleteRun<'a> {
+    pub run_id: &'a RunId,
+}
+impl VoidEndpoint for DeleteRun<'_> {
+    const PATH: &'static str = "2.0/mlflow/runs/delete";
+    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+struct GetRun<'a> {
+    pub run_id: &'a RunId,
+}
+impl Endpoint for GetRun<'_> {
+    const PATH: &'static str = "";
+    const METHOD: fn(&str) -> ureq::Request = ureq::get;
+    type Response = GetRunResponse;
     type Value = Run;
 
     fn extract(response: Self::Response) -> Self::Value {
