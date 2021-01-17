@@ -4,7 +4,8 @@ use crate::{
         error::{BatchError, CreateError, DeleteError, GetError, StorageError, UpdateError},
         experiment::Experiment,
         limits,
-        run::{Metric, Param, Run, RunInfo, RunStatus, RunTag},
+        run::{Metric, Param, Run, RunData, RunInfo, RunStatus, RunTag},
+        search::{PageToken, RunList, Search},
     },
     ExperimentId, RunId,
 };
@@ -201,6 +202,59 @@ impl Client for Server {
                 code: RestErrorCode::ResourceDoesNotExist,
                 ..
             } => UpdateError::DoesNotExist(id.as_ref().to_string()),
+            _ => UpdateError::Storage(error.into()),
+        })
+    }
+
+    fn search_runs(
+        &mut self,
+        experiment_ids: &[&ExperimentId],
+        filter: &str,
+        run_view_type: ViewType,
+        max_results: i32,
+        order_by: Option<&str>,
+        page_token: Option<&str>,
+    ) -> Result<Search, StorageError> {
+        let request = SearchRuns {
+            experiment_ids,
+            filter,
+            run_view_type,
+            max_results,
+            order_by,
+            page_token,
+        };
+        self.execute(request, StorageError::from)
+    }
+
+    fn list_run_infos(
+        &mut self,
+        experiment: &ExperimentId,
+        run_view_type: ViewType,
+        max_results: i32,
+        order_by: Option<&str>,
+        page_token: Option<&str>,
+    ) -> Result<RunList, StorageError> {
+        let request = ListRunInfos {
+            experiment_ids: &[experiment],
+            filter: "",
+            run_view_type,
+            max_results,
+            order_by,
+            page_token,
+        };
+        self.execute(request, StorageError::from)
+    }
+
+    fn get_metric_history(&mut self, run: &RunId, metric: &str) -> Result<Vec<Metric>, GetError> {
+        let request = GetHistory {
+            run_id: run,
+            metric_key: metric,
+        };
+        self.execute(request, |error| match error {
+            RestError::Known {
+                code: RestErrorCode::ResourceDoesNotExist,
+                ..
+            } => UpdateError::DoesNotExist(run.as_ref().to_string()),
             _ => UpdateError::Storage(error.into()),
         })
     }
@@ -491,14 +545,90 @@ impl Endpoint for UpdateRun<'_> {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 struct LogBatch<'a> {
-    run_id: &'a RunId,
-    metrics: &'a [Metric<'a>],
-    params: &'a [Param],
-    tags: &'a [RunTag],
+    pub run_id: &'a RunId,
+    pub metrics: &'a [Metric<'a>],
+    pub params: &'a [Param],
+    pub tags: &'a [RunTag],
 }
 impl VoidEndpoint for LogBatch<'_> {
     const PATH: &'static str = "2.0/mlflow/runs/log-batch";
     const METHOD: fn(&str) -> ureq::Request = ureq::post;
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+struct SearchRuns<'a> {
+    pub experiment_ids: &'a [&'a ExperimentId],
+    pub filter: &'a str,
+    pub run_view_type: ViewType,
+    pub max_results: i32,
+    pub order_by: Option<&'a str>,
+    pub page_token: Option<&'a str>,
+}
+impl Endpoint for SearchRuns<'_> {
+    const PATH: &'static str = "";
+    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    type Response = Search;
+    type Value = Search;
+
+    fn extract(response: Self::Response) -> Self::Value {
+        response
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+struct ListRunInfos<'a> {
+    pub experiment_ids: &'a [&'a ExperimentId],
+    pub filter: &'a str,
+    pub run_view_type: ViewType,
+    pub max_results: i32,
+    pub order_by: Option<&'a str>,
+    pub page_token: Option<&'a str>,
+}
+#[derive(Deserialize)]
+struct ListRunInfosRun {
+    info: RunInfo,
+
+    #[allow(dead_code)]
+    #[serde(default, skip)]
+    data: RunData,
+}
+#[derive(Deserialize)]
+struct ListRunInfosResponse {
+    pub runs: Vec<ListRunInfosRun>,
+    pub next_page_token: PageToken,
+}
+impl Endpoint for ListRunInfos<'_> {
+    const PATH: &'static str = SearchRuns::PATH;
+    const METHOD: fn(&str) -> ureq::Request = SearchRuns::METHOD;
+    type Response = ListRunInfosResponse;
+    type Value = RunList;
+
+    fn extract(response: Self::Response) -> Self::Value {
+        RunList {
+            runs: response.runs.into_iter().map(|r| r.info).collect(),
+            page_token: response.next_page_token,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+struct GetHistory<'a> {
+    pub run_id: &'a RunId,
+    pub metric_key: &'a str,
+}
+#[derive(Deserialize)]
+struct GetHistoryResponse {
+    metrics: Vec<Metric<'static>>,
+}
+impl Endpoint for GetHistory<'_> {
+    const PATH: &'static str = "2.0/mlflow/metrics/get-history";
+    const METHOD: fn(&str) -> ureq::Request = ureq::get;
+    type Response = GetHistoryResponse;
+    type Value = Vec<Metric<'static>>;
+
+    fn extract(response: Self::Response) -> Self::Value {
+        response.metrics
+    }
 }
 
 #[cfg(test)]

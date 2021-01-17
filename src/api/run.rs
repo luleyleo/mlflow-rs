@@ -27,7 +27,7 @@ pub struct Run {
     pub data: RunData,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct RunData {
     pub metrics: Option<Vec<Metric<'static>>>,
     pub params: Option<Vec<Param>>,
