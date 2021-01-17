@@ -34,14 +34,15 @@ fn main() {
 
 The following parts of the API are implemented:
 
-- [ ] Experiments
+- [x] Experiments
     - [x] Create
     - [x] Read
-    - [ ] Manage
-- [ ] Runs
+    - [x] Update
+- [x] Runs
     - [x] Create
-    - [ ] Read
-    - [ ] Manage
+    - [x] Read
+    - [x] Update
+    - [x] Search
 - [ ] Logging
     - [x] Parameters
     - [x] Metrics
@@ -49,5 +50,5 @@ The following parts of the API are implemented:
 - [ ] Models
     - [ ] Create
     - [ ] Read
-    - [ ] Manage
-- [ ] Tags
+    - [ ] Update
+- [x] Tags
