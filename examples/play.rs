@@ -27,11 +27,16 @@ fn main() -> Result<()> {
         let experiment_id = client.create_experiment(&args.experiment);
         match experiment_id.as_ref() {
             Ok(experiment_id) => {
-                println!("Experiment with id {} was created successfully!", experiment_id.as_ref());
+                println!(
+                    "Experiment with id {} was created successfully!",
+                    experiment_id.as_ref()
+                );
             }
             Err(CreateError::AlreadyExists(name)) => {
                 println!("The experiment {} already exists.", name);
-                println!("Run again without the -c or --create flag to fetch the existing experiment.");
+                println!(
+                    "Run again without the -c or --create flag to fetch the existing experiment."
+                );
                 return Ok(());
             }
             Err(CreateError::Storage(err)) => {

@@ -57,7 +57,8 @@ impl<'b> TrackingRun<'b> {
 
     pub fn log_metric(&mut self, key: impl Into<Cow<'b, str>>, value: f64, step: i64) {
         if self.metric_buffer.last().unwrap().len() == limits::BATCH_METRICS {
-            self.metric_buffer.push(Vec::with_capacity(limits::BATCH_METRICS));
+            self.metric_buffer
+                .push(Vec::with_capacity(limits::BATCH_METRICS));
         }
         let metric = Metric {
             key: key.into(),
@@ -68,7 +69,11 @@ impl<'b> TrackingRun<'b> {
         self.metric_buffer.last_mut().unwrap().push(metric);
     }
 
-    pub fn submit(self, client: &mut dyn Client, experiment: &ExperimentId) -> Result<Run, StorageError> {
+    pub fn submit(
+        self,
+        client: &mut dyn Client,
+        experiment: &ExperimentId,
+    ) -> Result<Run, StorageError> {
         let mut run = client.create_run(experiment, self.start_time, &[])?;
         let id = &run.info.run_id.clone();
         client.log_batch(id, &[], &self.param_buffer, &self.tag_buffer)?;

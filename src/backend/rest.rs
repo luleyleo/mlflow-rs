@@ -24,7 +24,11 @@ struct RestErrorResponse {
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum RestError {
     #[error("{status} {code}: {message}")]
-    Known { status: u16, code: RestErrorCode, message: String },
+    Known {
+        status: u16,
+        code: RestErrorCode,
+        message: String,
+    },
     #[error("Unknown {status} error:\n{body}")]
     Unknown { status: u16, body: String },
 }
@@ -76,7 +80,9 @@ fn parse_error(response: ureq::Response) -> RestError {
 
 impl Server {
     pub fn new(api_url: impl Into<String>) -> Self {
-        Server { api_url: api_url.into() }
+        Server {
+            api_url: api_url.into(),
+        }
     }
 
     fn execute<Ep, Val, Hand, Err>(&mut self, request: Ep, error_handler: Hand) -> Result<Val, Err>
@@ -92,9 +98,11 @@ impl Server {
             let error = parse_error(http_response);
             Err(error_handler(error))
         } else {
-            let response_string = http_response.into_string().context("failed to turn response into string")?;
-            let response =
-                Ep::read_response_string(&response_string).with_context(|| format!("deserializing response failed:\n{}", &response_string))?;
+            let response_string = http_response
+                .into_string()
+                .context("failed to turn response into string")?;
+            let response = Ep::read_response_string(&response_string)
+                .with_context(|| format!("deserializing response failed:\n{}", &response_string))?;
             let value = Ep::extract(response);
             Ok(value)
         }
@@ -134,7 +142,9 @@ impl Client for Server {
     }
 
     fn get_experiment_by_name(&mut self, name: &str) -> Result<Experiment, GetError> {
-        let request = GetExperimentByName { experiment_name: name };
+        let request = GetExperimentByName {
+            experiment_name: name,
+        };
         self.execute(request, |error| match error {
             RestError::Known {
                 code: RestErrorCode::ResourceDoesNotExist,
@@ -155,12 +165,24 @@ impl Client for Server {
         })
     }
 
-    fn update_experiment(&mut self, id: &ExperimentId, new_name: Option<&str>) -> Result<(), StorageError> {
-        let request = UpdateExperiment { experiment_id: id, new_name };
+    fn update_experiment(
+        &mut self,
+        id: &ExperimentId,
+        new_name: Option<&str>,
+    ) -> Result<(), StorageError> {
+        let request = UpdateExperiment {
+            experiment_id: id,
+            new_name,
+        };
         self.execute(request, StorageError::from)
     }
 
-    fn create_run(&mut self, experiment_id: &ExperimentId, start_time: i64, tags: &[RunTag]) -> Result<Run, StorageError> {
+    fn create_run(
+        &mut self,
+        experiment_id: &ExperimentId,
+        start_time: i64,
+        tags: &[RunTag],
+    ) -> Result<Run, StorageError> {
         let request = CreateRun {
             experiment_id,
             start_time,
@@ -191,7 +213,12 @@ impl Client for Server {
         })
     }
 
-    fn update_run(&mut self, id: &RunId, status: RunStatus, end_time: i64) -> Result<RunInfo, UpdateError> {
+    fn update_run(
+        &mut self,
+        id: &RunId,
+        status: RunStatus,
+        end_time: i64,
+    ) -> Result<RunInfo, UpdateError> {
         let request = UpdateRun {
             run_id: id,
             status,
@@ -264,7 +291,14 @@ impl Client for Server {
         self.execute(request, StorageError::from)
     }
 
-    fn log_metric(&mut self, run_id: &RunId, key: &str, value: f64, timestamp: i64, step: i64) -> Result<(), StorageError> {
+    fn log_metric(
+        &mut self,
+        run_id: &RunId,
+        key: &str,
+        value: f64,
+        timestamp: i64,
+        step: i64,
+    ) -> Result<(), StorageError> {
         let request = LogMetric {
             run_id,
             key,
@@ -275,7 +309,13 @@ impl Client for Server {
         self.execute(request, StorageError::from)
     }
 
-    fn log_batch(&mut self, run: &RunId, metrics: &[Metric], params: &[Param], tags: &[RunTag]) -> Result<(), BatchError> {
+    fn log_batch(
+        &mut self,
+        run: &RunId,
+        metrics: &[Metric],
+        params: &[Param],
+        tags: &[RunTag],
+    ) -> Result<(), BatchError> {
         if metrics.len() > limits::BATCH_METRICS {
             return Err(BatchError::ToManyMetrics(metrics.len()));
         }
