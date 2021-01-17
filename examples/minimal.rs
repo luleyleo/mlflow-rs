@@ -1,13 +1,6 @@
-# mlflow-rs
+use mlflow::{Client, backend::rest::Server, tracking::TrackingRun};
+use nanorand::{RNG, WyRand};
 
-Rust library providing access to the MLflow REST API.
-
-This is **not** an official project.
-
-# Example
-
-[minmal.rs](examples/minimal.rs)
-```rust
 fn main() {
     const EXPERIMENT: &str = "My Experiment";
     let mut client = Server::new("http://127.0.0.1:5000/api");
@@ -32,27 +25,3 @@ fn main() {
             .expect("Could not submit the run");
     }
 }
-```
-
-# State
-
-The following parts of the API are implemented:
-
-- [x] Experiments
-    - [x] Create
-    - [x] Read
-    - [x] Update
-- [x] Runs
-    - [x] Create
-    - [x] Read
-    - [x] Update
-    - [x] Search
-- [ ] Logging
-    - [x] Parameters
-    - [x] Metrics
-    - [ ] Artifacts
-- [ ] Models
-    - [ ] Create
-    - [ ] Read
-    - [ ] Update
-- [x] Tags
