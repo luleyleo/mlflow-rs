@@ -56,6 +56,21 @@ impl Display for RestErrorCode {
     }
 }
 
+#[derive(PartialEq, Eq)]
+enum RestMethod {
+    Get,
+    Post,
+}
+impl RestMethod {
+    fn handler(&self) -> fn (&str) -> ureq::Request {
+        match self {
+            Self::Get => ureq::get,
+            Self::Post => ureq::post,
+        }
+    }
+}
+
+
 pub struct Server {
     api_url: String,
 }
@@ -92,8 +107,15 @@ impl Server {
         Err: From<anyhow::Error>,
     {
         let url = format!("{}/{}", self.api_url, Ep::PATH);
-        let buffer = Ep::write_request_string(&request).context("serializing request failed")?;
-        let http_response = Ep::METHOD(&url).send_string(&buffer);
+
+        let http_response = if Ep::METHOD == RestMethod::Get {
+            let query_str = Ep::write_request_query_string(&request).context("serializing request failed")?;
+            Ep::METHOD.handler()(&url).query_str(&query_str).call()
+        } else {
+            let buffer = Ep::write_request_body_string(&request).context("serializing request failed")?;
+            Ep::METHOD.handler()(&url).send_string(&buffer)
+        };
+
         if http_response.error() {
             let error = parse_error(http_response);
             Err(error_handler(error))
@@ -341,7 +363,7 @@ impl Client for Server {
 
 trait Endpoint {
     const PATH: &'static str;
-    const METHOD: fn(&str) -> ureq::Request;
+    const METHOD: RestMethod;
 
     type Response;
     type Value;
@@ -350,20 +372,21 @@ trait Endpoint {
 }
 trait VoidEndpoint {
     const PATH: &'static str;
-    const METHOD: fn(&str) -> ureq::Request;
+    const METHOD: RestMethod;
 }
 trait EndpointExt: Endpoint {
     fn write_request(request: &Self, writer: impl Write) -> Result<(), Error>;
     fn read_response(reader: impl Read) -> Result<Self::Response, Error>;
     fn read_response_string(response: &str) -> Result<Self::Response, Error>;
-    fn write_request_string(request: &Self) -> Result<String, Error>;
+    fn write_request_body_string(request: &Self) -> Result<String, Error>;
+    fn write_request_query_string(request: &Self) -> Result<String, Error>;
 }
 impl<E> Endpoint for E
 where
     E: VoidEndpoint,
 {
     const PATH: &'static str = E::PATH;
-    const METHOD: fn(&str) -> ureq::Request = E::METHOD;
+    const METHOD: RestMethod = E::METHOD;
 
     type Response = VoidResponse;
     type Value = ();
@@ -393,8 +416,12 @@ where
         Ok(response)
     }
 
-    fn write_request_string(request: &Self) -> Result<String, Error> {
+    fn write_request_body_string(request: &Self) -> Result<String, Error> {
         Ok(serde_json::to_string(request)?)
+    }
+
+    fn write_request_query_string(request: &Self) -> Result<String, Error> {
+        Ok(serde_qs::to_string(request)?)
     }
 }
 
@@ -412,7 +439,7 @@ struct CreateExperimentResponse {
 }
 impl Endpoint for CreateExperiment<'_> {
     const PATH: &'static str = "2.0/mlflow/experiments/create";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
     type Response = CreateExperimentResponse;
     type Value = ExperimentId;
 
@@ -431,7 +458,7 @@ struct GetExperimentResponse {
 }
 impl Endpoint for GetExperiment<'_> {
     const PATH: &'static str = "2.0/mlflow/experiments/get";
-    const METHOD: fn(&str) -> ureq::Request = ureq::get;
+    const METHOD: RestMethod = RestMethod::Get;
     type Value = Experiment;
     type Response = GetExperimentResponse;
 
@@ -447,7 +474,7 @@ struct UpdateExperiment<'a> {
 }
 impl VoidEndpoint for UpdateExperiment<'_> {
     const PATH: &'static str = "2.0/mlflow/experiments/update";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -460,7 +487,7 @@ struct ListExperimentsResponse {
 }
 impl Endpoint for ListExperiments {
     const PATH: &'static str = "2.0/mlflow/experiments/list";
-    const METHOD: fn(&str) -> ureq::Request = ureq::get;
+    const METHOD: RestMethod = RestMethod::Get;
     type Response = ListExperimentsResponse;
     type Value = Vec<Experiment>;
 
@@ -475,7 +502,7 @@ struct GetExperimentByName<'a> {
 }
 impl Endpoint for GetExperimentByName<'_> {
     const PATH: &'static str = "2.0/mlflow/experiments/get-by-name";
-    const METHOD: fn(&str) -> ureq::Request = ureq::get;
+    const METHOD: RestMethod = RestMethod::Get;
     type Value = Experiment;
     type Response = GetExperimentResponse;
 
@@ -490,7 +517,7 @@ struct DeleteExperiment<'a> {
 }
 impl VoidEndpoint for DeleteExperiment<'_> {
     const PATH: &'static str = "2.0/mlflow/experiments/delete";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -505,7 +532,7 @@ struct GetRunResponse {
 }
 impl Endpoint for CreateRun<'_> {
     const PATH: &'static str = "2.0/mlflow/runs/create";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
     type Response = GetRunResponse;
     type Value = Run;
 
@@ -520,7 +547,7 @@ struct DeleteRun<'a> {
 }
 impl VoidEndpoint for DeleteRun<'_> {
     const PATH: &'static str = "2.0/mlflow/runs/delete";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -529,7 +556,7 @@ struct GetRun<'a> {
 }
 impl Endpoint for GetRun<'_> {
     const PATH: &'static str = "";
-    const METHOD: fn(&str) -> ureq::Request = ureq::get;
+    const METHOD: RestMethod = RestMethod::Get;
     type Response = GetRunResponse;
     type Value = Run;
 
@@ -546,7 +573,7 @@ struct LogParam<'a> {
 }
 impl VoidEndpoint for LogParam<'_> {
     const PATH: &'static str = "2.0/mlflow/runs/log-parameter";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -559,7 +586,7 @@ struct LogMetric<'a> {
 }
 impl VoidEndpoint for LogMetric<'_> {
     const PATH: &'static str = "2.0/mlflow/runs/log-metric";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -574,7 +601,7 @@ struct UpdateRunResponse {
 }
 impl Endpoint for UpdateRun<'_> {
     const PATH: &'static str = "2.0/mlflow/runs/update";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
     type Response = UpdateRunResponse;
     type Value = RunInfo;
 
@@ -592,7 +619,7 @@ struct LogBatch<'a> {
 }
 impl VoidEndpoint for LogBatch<'_> {
     const PATH: &'static str = "2.0/mlflow/runs/log-batch";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -606,7 +633,7 @@ struct SearchRuns<'a> {
 }
 impl Endpoint for SearchRuns<'_> {
     const PATH: &'static str = "";
-    const METHOD: fn(&str) -> ureq::Request = ureq::post;
+    const METHOD: RestMethod = RestMethod::Post;
     type Response = Search;
     type Value = Search;
 
@@ -639,7 +666,7 @@ struct ListRunInfosResponse {
 }
 impl Endpoint for ListRunInfos<'_> {
     const PATH: &'static str = SearchRuns::PATH;
-    const METHOD: fn(&str) -> ureq::Request = SearchRuns::METHOD;
+    const METHOD: RestMethod = SearchRuns::METHOD;
     type Response = ListRunInfosResponse;
     type Value = RunList;
 
@@ -662,7 +689,7 @@ struct GetHistoryResponse {
 }
 impl Endpoint for GetHistory<'_> {
     const PATH: &'static str = "2.0/mlflow/metrics/get-history";
-    const METHOD: fn(&str) -> ureq::Request = ureq::get;
+    const METHOD: RestMethod = RestMethod::Get;
     type Response = GetHistoryResponse;
     type Value = Vec<Metric<'static>>;
 
